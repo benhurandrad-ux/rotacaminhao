@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rota Caminhão · protótipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --bg:#0b1220;--panel:#0f1a2e;--panel2:#132239;--line:#1f3151;--text:#e8eefb;--muted:#8fa1c2;
+  --accent:#2f7bff;--accent2:#5ea0ff;--car:#9aa7be;--ok:#38d39f;--warn:#ffb020;--bad:#ff5a5a;--mono:'JetBrains Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:'Instrument Sans',system-ui,sans-serif;background:var(--bg);color:var(--text);display:grid;grid-template-columns:400px 1fr;height:100vh;overflow:hidden}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.head{padding:18px 20px 14px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#1a4fc0);display:grid;place-items:center}
+.logo svg{width:22px;height:22px}
+.head h1{font-size:16px;margin:0;font-weight:600;letter-spacing:-.01em}
+.head small{display:block;color:var(--muted);font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:2px}
+.scroll{overflow:auto;padding:16px 20px 24px;flex:1;min-height:0}
+.lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:14px 0 6px}
+.lbl:first-child{margin-top:0}
+input,select{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px 12px;font:inherit;font-size:14px;outline:none}
+input:focus,select:focus{border-color:var(--accent)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.row3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.num{position:relative}
+.num span{position:absolute;right:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-family:var(--mono);font-size:11px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.chip{background:transparent;border:1px solid var(--line);color:var(--muted);border-radius:999px;padding:5px 10px;font:inherit;font-size:12px;cursor:pointer}
+.chip:hover{border-color:var(--accent2);color:var(--text)}
+.toggle{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.toggle:last-of-type{border-bottom:0}
+.sw{position:relative;width:38px;height:22px;background:var(--line);border-radius:999px;cursor:pointer;flex:none}
+.sw::after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s}
+.sw.on{background:var(--accent)}.sw.on::after{left:19px}
+.btn{width:100%;margin-top:16px;background:var(--accent);color:#fff;border:0;border-radius:12px;padding:13px;font:inherit;font-weight:600;font-size:15px;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:wait}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);margin-top:8px;font-weight:500;font-size:13.5px}
+.btn.ghost.active{border-color:var(--warn);color:var(--warn)}
+.status{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px;min-height:16px}
+.cmp{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px}
+.card .t{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px}
+.card .t i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.card .big{font-size:22px;font-weight:600;margin-top:6px;letter-spacing:-.02em}
+.card .sub{font-size:12.5px;color:var(--muted)}
+.diag{margin-top:10px;font-size:13px}
+.diag div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)}
+.diag div:last-child{border-bottom:0}
+.diag b{font-weight:500}
+.diag .v{font-family:var(--mono);font-size:12px}
+.bad{color:var(--bad)}.warn{color:var(--warn)}.ok{color:var(--ok)}
+.steps{margin-top:10px;font-size:13px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.steps div{padding:8px 12px;border-bottom:1px solid var(--line);display:flex;gap:10px}
+.steps div:last-child{border-bottom:0}
+.steps .km{font-family:var(--mono);font-size:11px;color:var(--muted);flex:none;width:52px;padding-top:2px}
+.verdict{margin-top:14px;padding:12px 14px;border-radius:12px;font-size:13.5px;line-height:1.45;border:1px solid var(--line);background:linear-gradient(180deg,rgba(47,123,255,.12),transparent)}
+#map{height:100%;width:100%;background:#0b1220}
+.leaflet-container{font-family:inherit}
+.leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) brightness(.82) contrast(.92) saturate(.6)}
+.legend{position:absolute;right:14px;top:14px;z-index:500;background:rgba(15,26,46,.92);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12.5px;backdrop-filter:blur(8px)}
+.legend div{display:flex;align-items:center;gap:8px;padding:3px 0}
+.legend i{width:22px;height:0;border-top:3px solid;display:inline-block}
+.legend i.dash{border-top-style:dashed}
+.pin{background:var(--warn);color:#000;border-radius:50%;width:22px;height:22px;display:grid;place-items:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.ab{background:#fff;color:#0b1220;border-radius:8px;padding:2px 7px;font-family:var(--mono);font-size:11px;font-weight:600;border:2px solid var(--accent);white-space:nowrap}
+.hint{position:absolute;left:50%;top:14px;transform:translateX(-50%);z-index:500;background:var(--warn);color:#111;padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;display:none}
+.hint.show{display:block}
+.main{position:relative;min-width:0}
+.foot{padding:10px 20px;border-top:1px solid var(--line);font-family:var(--mono);font-size:10.5px;color:var(--muted);letter-spacing:.04em}
+@media (max-width:900px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr;height:auto;overflow:auto}
+  aside{max-height:none}.scroll{overflow:visible}
+  .main{height:60vh;position:sticky;top:0}
+}
+</style>
+</head>
+<body>
+<aside>
+  <div class="head">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div>
+    <div><h1>Rota Caminhão</h1><small>protótipo · motor de rota v0</small></div>
+  </div>
+  <div class="scroll">
+    <div class="lbl">Origem</div>
+    <input id="from" placeholder="Cidade, endereço ou rodovia" value="Betim, MG">
+    <div class="lbl">Destino</div>
+    <input id="to" placeholder="Cidade, endereço ou rodovia" value="Itaguara, MG">
+    <div class="chips">
+      <button class="chip" data-f="Betim, MG" data-t="Itaguara, MG">Betim → Itaguara</button>
+      <button class="chip" data-f="Pará de Minas, MG" data-t="Bom Despacho, MG">Pará de Minas → Bom Despacho</button>
+      <button class="chip" data-f="Divinópolis, MG" data-t="Cláudio, MG">Divinópolis → Cláudio</button>
+      <button class="chip" data-f="São João del Rei, MG" data-t="Barbacena, MG">S. João del Rei → Barbacena</button>
+      <button class="chip" data-f="Contagem, MG" data-t="Juiz de Fora, MG">Contagem → Juiz de Fora</button>
+    </div>
+
+    <div class="lbl">Caminhão</div>
+    <select id="preset">
+      <option value="vuc">VUC · 2 eixos · 8 t</option>
+      <option value="toco">Toco · 2 eixos · 16 t</option>
+      <option value="truck">Truck · 3 eixos · 23 t</option>
+      <option value="carreta" selected>Carreta · 5 eixos · 41,5 t</option>
+      <option value="bitrem">Bitrem · 7 eixos · 57 t</option>
+      <option value="rodotrem">Rodotrem · 9 eixos · 74 t</option>
+    </select>
+    <div class="row3" style="margin-top:8px">
+      <div class="num"><input id="h" type="number" step="0.1"><span>m alt</span></div>
+      <div class="num"><input id="w" type="number" step="0.1"><span>m larg</span></div>
+      <div class="num"><input id="l" type="number" step="0.1"><span>m comp</span></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="num"><input id="wt" type="number" step="0.5"><span>t peso</span></div>
+      <div class="num"><input id="ax" type="number" step="1"><span>eixos</span></div>
+    </div>
+
+    <div class="lbl">Regras da rota</div>
+    <div class="toggle"><span>Nunca mandar por estrada de chão</span><div class="sw on" id="t_unpaved"></div></div>
+    <div class="toggle"><span>Preferir rodovia, mesmo mais longa</span><div class="sw on" id="t_hwy"></div></div>
+    <div class="toggle"><span>Evitar rua de cidade e via local</span><div class="sw on" id="t_city"></div></div>
+    <div class="toggle"><span>Aceitar pedágio</span><div class="sw on" id="t_toll"></div></div>
+
+    <button class="btn" id="go">Calcular rota</button>
+    <button class="btn ghost" id="report">Reportar problema no mapa</button>
+    <div class="status" id="status"></div>
+
+    <div id="result" style="display:none">
+      <div class="cmp">
+        <div class="card"><div class="t"><i style="background:var(--car)"></i>Carro (Google/Waze)</div><div class="big" id="carKm"></div><div class="sub" id="carMin"></div></div>
+        <div class="card"><div class="t"><i style="background:var(--accent)"></i>Caminhão</div><div class="big" id="trKm"></div><div class="sub" id="trMin"></div></div>
+      </div>
+      <div class="verdict" id="verdict"></div>
+      <div class="lbl">Raio-X da rota do carro</div>
+      <div class="diag" id="diagCar"></div>
+      <div class="lbl">Raio-X da rota do caminhão</div>
+      <div class="diag" id="diagTr"></div>
+      <div class="lbl">Trajeto do caminhão</div>
+      <div class="steps" id="steps"></div>
+    </div>
+  </div>
+  <div class="foot">DADOS: OPENSTREETMAP · MOTOR: VALHALLA · RELATOS: LOCAIS (LOCALSTORAGE)</div>
+</aside>
+<div class="main">
+  <div id="map"></div>
+  <div class="legend">
+    <div><i class="dash" style="border-color:var(--car)"></i>Carro (Google/Waze)</div>
+    <div><i style="border-color:var(--accent)"></i>Caminhão</div>
+    <div><i style="border-color:var(--bad)"></i>Trecho de terra / cascalho</div>
+    <div><i style="border-color:var(--warn)"></i>Trecho urbano / via local</div>
+  </div>
+  <div class="hint" id="hint">Clique no mapa no ponto do problema</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const VALHALLA='https://valhalla1.openstreetmap.de';
+const NOMINATIM='https://nominatim.openstreetmap.org/search';
+const PRESETS={
+  vuc:{h:3.2,w:2.2,l:7.5,wt:8,ax:2},
+  toco:{h:4.0,w:2.6,l:10,wt:16,ax:2},
+  truck:{h:4.2,w:2.6,l:12,wt:23,ax:3},
+  carreta:{h:4.4,w:2.6,l:18.6,wt:41.5,ax:5},
+  bitrem:{h:4.4,w:2.6,l:19.8,wt:57,ax:7},
+  rodotrem:{h:4.4,w:2.6,l:30,wt:74,ax:9},
+};
+const $=id=>document.getElementById(id);
+const map=L.map('map',{zoomControl:false}).setView([-19.9,-44.4],8);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
+const layers=L.layerGroup().addTo(map);
+const reportsLayer=L.layerGroup().addTo(map);
+
+function applyPreset(k){const p=PRESETS[k];$('h').value=p.h;$('w').value=p.w;$('l').value=p.l;$('wt').value=p.wt;$('ax').value=p.ax;}
+applyPreset('carreta');
+$('preset').onchange=e=>applyPreset(e.target.value);
+document.querySelectorAll('.sw').forEach(s=>s.onclick=()=>s.classList.toggle('on'));
+document.querySelectorAll('.chip').forEach(c=>c.onclick=()=>{$('from').value=c.dataset.f;$('to').value=c.dataset.t;calc();});
+const on=id=>$(id).classList.contains('on');
+
+function decode(str,prec=6){let i=0,lat=0,lng=0,out=[],f=Math.pow(10,prec);while(i<str.length){let b,s=0,r=0;do{b=str.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lat+=(r&1)?~(r>>1):(r>>1);s=0;r=0;do{b=str.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lng+=(r&1)?~(r>>1):(r>>1);out.push([lat/f,lng/f]);}return out;}
+
+async function geocode(q){
+  const r=await fetch(`${NOMINATIM}?format=json&limit=1&countrycodes=br&accept-language=pt-BR&q=${encodeURIComponent(q)}`);
+  const j=await r.json(); if(!j.length) throw new Error('Não achei: '+q);
+  return {lat:+j[0].lat,lon:+j[0].lon,name:j[0].display_name.split(',').slice(0,2).join(',')};
+}
+async function post(ep,body){
+  const r=await fetch(`${VALHALLA}/${ep}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!r.ok) throw new Error(ep+' '+r.status); return r.json();
+}
+function truckOptions(){
+  return {truck:{
+    height:+$('h').value,width:+$('w').value,length:+$('l').value,weight:+$('wt').value,axle_load:Math.min(10,+$('wt').value/+$('ax').value),axle_count:+$('ax').value,
+    use_highways:on('t_hwy')?1:0.5,use_tolls:on('t_toll')?1:0,use_tracks:0,exclude_unpaved:on('t_unpaved'),
+    use_living_streets:on('t_city')?0:0.5,service_penalty:on('t_city')?600:15,
+  }};
+}
+async function route(a,b,costing){
+  const body={locations:[{lat:a.lat,lon:a.lon},{lat:b.lat,lon:b.lon}],costing,units:'kilometers',language:'pt-BR'};
+  if(costing==='truck') body.costing_options=truckOptions();
+  const j=await post('route',body); const leg=j.trip.legs[0];
+  return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:leg.shape,pts:decode(leg.shape),maneuvers:leg.maneuvers};
+}
+async function xray(shape,costing){
+  const j=await post('trace_attributes',{encoded_polyline:shape,costing,shape_match:'edge_walk',units:'kilometers',filters:{attributes:['edge.surface','edge.road_class','edge.length','edge.begin_shape_index','edge.end_shape_index','edge.names'],action:'include'}});
+  const edges=j.edges||[]; const pts=decode(j.shape||shape);
+  const UNP=new Set(['compacted','dirt','gravel','path','impassable','paved_rough']);
+  const URB=new Set(['residential','unclassified','service_other','living_street']);
+  let dirt=0,urban=0,hwy=0,total=0,dirtSegs=[],urbSegs=[];
+  for(const e of edges){const L=e.length||0;total+=L;
+    const seg=pts.slice(e.begin_shape_index,e.end_shape_index+1);
+    if(UNP.has(e.surface)){dirt+=L;dirtSegs.push(seg);}
+    else if(URB.has(e.road_class)){urban+=L;urbSegs.push(seg);}
+    if(['motorway','trunk','primary'].includes(e.road_class)) hwy+=L;
+  }
+  return {dirt,urban,hwy,total,dirtSegs,urbSegs};
+}
+const PT=[[/^Bear /,'Siga '],[/^Turn /,'Vire '],[/^Keep /,'Mantenha-se '],[/^Continue /,'Continue '],[/^Take the exit/,'Pegue a saída'],[/^Take exit/,'Pegue a saída'],[/^Merge/,'Entre'],[/^Drive /,'Siga '],[/^Head /,'Siga '],[/^Make a /,'Faça um '],[/^Enter the roundabout/,'Entre na rotatória'],[/^Exit the roundabout/,'Saia da rotatória'],[/ toward /g,' sentido '],[/ onto /g,' para '],[/ on /g,' pela '],[/ right/g,' à direita'],[/ left/g,' à esquerda'],[/ straight/g,' em frente'],[/ north/g,' norte'],[/ south/g,' sul'],[/ east/g,' leste'],[/ west/g,' oeste'],[/You have arrived at your destination/,'Você chegou ao destino'],[/ and /g,' e '],[/ the /g,' a '],[/ becomes /g,' vira ']];
+const pt=t=>PT.reduce((a,[r,v])=>a.replace(r,v),t);
+const fmtKm=v=>v.toFixed(1).replace('.',',')+' km';
+const fmtMin=m=>{const h=Math.floor(m/60),mm=Math.round(m%60);return h?`${h}h ${String(mm).padStart(2,'0')}min`:`${mm} min`};
+function diagHtml(x){
+  const p=v=>x.total?Math.round(100*v/x.total):0;
+  return `<div><b>Estrada de chão / cascalho</b><span class="v ${x.dirt>0.3?'bad':'ok'}">${fmtKm(x.dirt)} · ${p(x.dirt)}%</span></div>
+  <div><b>Rua de cidade / via local</b><span class="v ${x.urban>3?'warn':'ok'}">${fmtKm(x.urban)} · ${p(x.urban)}%</span></div>
+  <div><b>Rodovia (federal/estadual)</b><span class="v ok">${fmtKm(x.hwy)} · ${p(x.hwy)}%</span></div>`;
+}
+let A,B;
+async function calc(){
+  const btn=$('go');btn.disabled=true;$('status').textContent='Localizando pontos…';
+  try{
+    [A,B]=await Promise.all([geocode($('from').value),geocode($('to').value)]);
+    $('status').textContent='Calculando rota de carro e de caminhão…';
+    const [car,tr]=await Promise.all([route(A,B,'auto'),route(A,B,'truck')]);
+    $('status').textContent='Analisando piso e tipo de via de cada trecho…';
+    const [xc,xt]=await Promise.all([xray(car.shape,'auto'),xray(tr.shape,'truck')]);
+    layers.clearLayers();
+    L.polyline(car.pts,{color:'#9aa7be',weight:4,dashArray:'6 8',opacity:.85}).addTo(layers);
+    xc.dirtSegs.forEach(s=>L.polyline(s,{color:'#ff5a5a',weight:6,opacity:.9}).addTo(layers));
+    xc.urbSegs.forEach(s=>L.polyline(s,{color:'#ffb020',weight:5,opacity:.8}).addTo(layers));
+    const tl=L.polyline(tr.pts,{color:'#2f7bff',weight:5,opacity:.95}).addTo(layers);
+    const mk=(p,t)=>L.marker([p.lat,p.lon],{icon:L.divIcon({className:'',html:`<div class="ab">${t}</div>`,iconAnchor:[14,12]})}).addTo(layers);
+    mk(A,'A · '+A.name.split(',')[0]);mk(B,'B · '+B.name.split(',')[0]);
+    map.fitBounds(tl.getBounds().extend(L.latLngBounds(car.pts)),{padding:[40,40]});
+    $('carKm').textContent=fmtKm(car.km);$('carMin').textContent=fmtMin(car.min);
+    $('trKm').textContent=fmtKm(tr.km);$('trMin').textContent=fmtMin(tr.min);
+    $('diagCar').innerHTML=diagHtml(xc);$('diagTr').innerHTML=diagHtml(xt);
+    const same=car.shape===tr.shape;
+    let v;
+    if(same) v=`<b>Mesma estrada para carro e caminhão.</b> Nesse par de cidades a rota do Google já é a boa. O ganho aparece nos trechos de interior e nas restrições de altura e peso.`;
+    else{
+      const dd=xc.dirt-xt.dirt,du=xc.urban-xt.urban;
+      v=`<b>Rota diferente.</b> O caminhão ficou ${fmtKm(tr.km-car.km).replace('-','')} ${tr.km>=car.km?'mais longo':'mais curto'} e ${fmtMin(Math.abs(tr.min-car.min))} ${tr.min>=car.min?'a mais':'a menos'}.`;
+      if(dd>0.2) v+=` Evitou <span class="bad">${fmtKm(dd)} de estrada de chão</span>.`;
+      if(du>0.5) v+=` Evitou <span class="warn">${fmtKm(du)} dentro de cidade</span>.`;
+      if(dd<=0.2&&du<=0.5) v+=` Diferença por restrição de peso, altura ou preferência por rodovia.`;
+    }
+    $('verdict').innerHTML=v;
+    $('steps').innerHTML=tr.maneuvers.filter(m=>m.length>0.3||m.type<=2).map(m=>`<div><span class="km">${fmtKm(m.length)}</span><span>${pt(m.instruction)}</span></div>`).join('');
+    $('result').style.display='block';
+    $('status').textContent=`OK · ${A.name} → ${B.name}`;
+  }catch(e){$('status').textContent='Erro: '+e.message;console.error(e);}
+  btn.disabled=false;
+}
+$('go').onclick=calc;
+
+// relatos da comunidade (local por enquanto)
+const TYPES=['Ponte / viaduto baixo','Estrada de chão','Caminhão proibido','Balança / fiscalização','Rua estreita, não passa carreta'];
+let reporting=false;
+function loadReports(){reportsLayer.clearLayers();const r=JSON.parse(localStorage.getItem('reports')||'[]');r.forEach(p=>L.marker([p.lat,p.lng],{icon:L.divIcon({className:'',html:'<div class="pin">!</div>',iconAnchor:[11,11]})}).bindPopup(`<b>${p.type}</b><br><small>${p.date}</small>`).addTo(reportsLayer));}
+$('report').onclick=()=>{reporting=!reporting;$('report').classList.toggle('active',reporting);$('hint').classList.toggle('show',reporting);};
+map.on('click',e=>{if(!reporting)return;const t=prompt('Tipo de problema:\n'+TYPES.map((t,i)=>`${i+1}. ${t}`).join('\n'),'2');const type=TYPES[(+t||1)-1]||TYPES[1];
+  const r=JSON.parse(localStorage.getItem('reports')||'[]');r.push({lat:e.latlng.lat,lng:e.latlng.lng,type,date:new Date().toLocaleString('pt-BR')});localStorage.setItem('reports',JSON.stringify(r));loadReports();reporting=false;$('report').classList.remove('active');$('hint').classList.remove('show');});
+loadReports();
+window.addEventListener('load',()=>setTimeout(calc,300));
+</script>
+</body>
+</html>

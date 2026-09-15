@@ -32,6 +32,8 @@ button:active{filter:brightness(.9)}
 svg{display:block}
 .screen{position:absolute;inset:0;display:none;flex-direction:column;background:var(--bg)}
 .screen.on{display:flex}
+#s-home,#s-preview,#s-nav{pointer-events:none}
+#s-home>*,#s-preview .card,#s-preview .back-fab,#s-nav .nav-top,#s-nav .nav-bot,#s-nav .fab,.toast{pointer-events:auto}
 #map{position:absolute;inset:0;background:var(--bg);z-index:0}
 .leaflet-container{font:inherit;background:var(--bg)}
 html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) brightness(.82) contrast(.92) saturate(.6)}

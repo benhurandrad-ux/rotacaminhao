@@ -259,6 +259,10 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
   <div class="steps" id="stepsList"></div>
   <button class="big" id="stepsClose">Voltar</button>
 </div>
+<div class="sheet" id="sh-street" role="dialog" aria-label="Ver a rua" style="max-height:85%;padding:12px 12px calc(var(--sab) + 12px)">
+  <div style="position:relative;width:100%;aspect-ratio:4/5;max-height:60vh;background:var(--panel2);border-radius:var(--r);overflow:hidden"><iframe id="svFrame" title="Street View" style="width:100%;height:100%;border:0" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div>
+  <div class="links" style="grid-template-columns:1fr 1fr"><button id="svOpenApp">Abrir no Google Maps</button><button id="svClose">Voltar</button></div>
+</div>
 <div class="sheet" id="sh-leave" role="dialog" aria-label="Sair da rota">
   <h2>Sair da rota?</h2>
   <button class="big danger" id="leaveYes">Sair</button>
@@ -325,6 +329,7 @@ function manText(m){
 }
 
 /* ============ dados ============ */
+const GOOGLE_MAPS_KEY=''; // chave da Maps Embed API (Street View dentro do app). Vazia = abre o Google Maps.
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
 const TRUCKS=[
@@ -598,7 +603,17 @@ function openSteps(){
 }
 /* Street View do Google no ponto escolhido (abre o app do Google Maps, sem chave de API) */
 let svPick=false;
-function openStreet(lat,lon){window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`,'_blank','noopener');}
+function headingAt(lat,lon){if(!S.route)return 0;const n=nearest(S.route.pts,[lat,lon]);const a=S.route.pts[n.i],b=S.route.pts[Math.min(n.i+1,S.route.pts.length-1)];const y=Math.sin(rad(b[1]-a[1]))*Math.cos(rad(b[0]));const x=Math.cos(rad(a[0]))*Math.sin(rad(b[0]))-Math.sin(rad(a[0]))*Math.cos(rad(b[0]))*Math.cos(rad(b[1]-a[1]));return (Math.atan2(y,x)*180/Math.PI+360)%360;}
+let svLast=null;
+function openStreet(lat,lon){
+  svLast=[lat,lon];
+  if(!GOOGLE_MAPS_KEY){window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`,'_blank','noopener');return;}
+  const h=Math.round(headingAt(lat,lon));
+  $('svFrame').src=`https://www.google.com/maps/embed/v1/streetview?key=${GOOGLE_MAPS_KEY}&location=${lat.toFixed(6)},${lon.toFixed(6)}&heading=${h}&pitch=0&fov=90&language=pt-BR`;
+  openSheet('sh-street');
+}
+$('svClose').onclick=()=>{closeSheets();$('svFrame').src='about:blank';};
+$('svOpenApp').onclick=()=>{if(svLast)window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${svLast[0].toFixed(6)},${svLast[1].toFixed(6)}`,'_blank','noopener');};
 function startStreetPick(){svPick=true;closeSheets();toast('Toque no ponto da rota que quer ver',6000);}
 map.on('click',e=>{if(!svPick)return;svPick=false;$('toast').classList.remove('on');const n=nearest(S.route?S.route.pts:[[e.latlng.lat,e.latlng.lng]],[e.latlng.lat,e.latlng.lng]);openStreet(n.pt[0],n.pt[1]);});
 $('stepsClose').onclick=closeSheets;$('stepsBtn2').onclick=()=>{closeSheets();openSteps();};

@@ -119,6 +119,8 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
 .radar svg{width:16px;height:16px}
 .rep{width:64px;height:64px;background:var(--panel2);border:2px solid var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:14px;font-weight:700}
 .rep svg{width:30px;height:30px;color:var(--warn)}
+#svNavBtn svg{color:var(--accent)}
+.eta{min-width:0}
 /* sheets */
 .sheet{position:absolute;left:0;right:0;bottom:0;z-index:40;background:var(--panel);border-top:2px solid var(--line);border-radius:var(--r) var(--r) 0 0;padding:16px 16px calc(var(--sab) + 16px);transform:translateY(105%);visibility:hidden;transition:transform .15s ease-out,visibility 0s .15s;max-height:75%;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .sheet.on{transform:none;visibility:visible;transition:transform .15s ease-out,visibility 0s}
@@ -206,6 +208,7 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
   <div class="nav-bot">
     <button class="eta" id="etaBtn" aria-label="Opções da viagem"><b id="etaTime">--:--</b><span id="etaSub"></span></button>
     <div class="lim" id="limSign" aria-label="Limite de velocidade"></div>
+    <button class="rep" id="svNavBtn" aria-label="Ver a rua da próxima manobra" style="margin-right:12px"><span id="icEye"></span>Ver rua</button>
     <button class="rep" id="repBtn" aria-label="Reportar problema"><span id="icWarn"></span>Reportar</button>
   </div>
 </section>
@@ -431,7 +434,7 @@ $('obAdjust').onclick=()=>{if(!S.truck){S.truck={...TRUCKS[3]};store.set('truck'
 function renderChip(){$('chip').innerHTML=`${I.truck}<span>${S.truck?S.truck.name:'Caminhão'}</span>`;$('setTruckName').textContent=S.truck?`${S.truck.name} · ${fmt1(S.truck.h)} m · ${fmt1(S.truck.wt)} t`:'';}
 
 /* ---- home ---- */
-$('icSearch').innerHTML=I.search;$('centerBtn').innerHTML=I.center;$('navCenter').innerHTML=I.center;$('icWarn').innerHTML=I.warn;
+$('icSearch').innerHTML=I.search;$('centerBtn').innerHTML=I.center;$('navCenter').innerHTML=I.center;$('icWarn').innerHTML=I.warn;$('icEye').innerHTML=I.eye;
 $('searchBack').innerHTML=I.back;$('pvBack').innerHTML=I.back;$('setBack').innerHTML=I.back;
 $('chip').onclick=openSettings;
 $('whereBtn').onclick=()=>{S.originOverride=null;openSearch('dest');};
@@ -649,6 +652,13 @@ function openStreet(lat,lon){
   openSheet('sh-street');
 }
 $('svClose').onclick=()=>{closeSheets();$('svFrame').src='about:blank';};
+$('svNavBtn').onclick=()=>{
+  if(!S.route||!S.pos)return;
+  const r=S.route,n=nearest(r.pts,[S.pos.lat,S.pos.lon]);const along=r.cum[n.i]+(r.cum[n.i+1]-r.cum[n.i])*n.t;
+  const m=r.maneuvers.find(x=>r.cum[x.begin_shape_index]>along+30&&x.type!==4&&x.type!==5&&x.type!==6);
+  const pt=m?r.pts[Math.max(0,m.begin_shape_index-1)]:[S.pos.lat,S.pos.lon];
+  openStreet(pt[0],pt[1]);
+};
 $('svOpenApp').onclick=()=>{if(svLast)window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${svLast[0].toFixed(6)},${svLast[1].toFixed(6)}`,'_blank','noopener');};
 function startStreetPick(){svPick=true;closeSheets();toast('Toque no ponto da rota que quer ver',6000);}
 map.on('click',e=>{

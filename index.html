@@ -485,8 +485,11 @@ async function route(a,b,costing){
 async function xray(shape,costing){
   const j=await post('trace_attributes',{encoded_polyline:shape,costing,shape_match:'edge_walk',units:'kilometers',filters:{attributes:['edge.surface','edge.road_class','edge.length','edge.begin_shape_index','edge.end_shape_index','edge.speed_limit'],action:'include'}});
   const pts=decode(j.shape||shape),UNP=new Set(['compacted','dirt','gravel','path','impassable','paved_rough']),URB=new Set(['residential','unclassified','service_other','living_street']);
-  let dirt=0,urban=0,hwy=0,total=0,dirtSegs=[],urbSegs=[],limits=[];
-  for(const e of (j.edges||[])){const L=e.length||0;total+=L;if(e.speed_limit&&e.speed_limit<200)limits.push({b:e.begin_shape_index,e:e.end_shape_index,v:e.speed_limit});const seg=pts.slice(e.begin_shape_index,e.end_shape_index+1);
+  let dirt=0,urban=0,hwy=0,total=0,dirtSegs=[],urbSegs=[],limits=[],along=0;
+  const routeKm=(j.edges||[]).reduce((a,e)=>a+(e.length||0),0);
+  for(const e of (j.edges||[])){const L=e.length||0;total+=L;if(e.speed_limit&&e.speed_limit<200)limits.push({b:e.begin_shape_index,e:e.end_shape_index,v:e.speed_limit});
+    const access=along<0.5||routeKm-along<0.5;along+=L; // saída e chegada (500 m) não contam como "dentro de cidade"
+    if(access&&!UNP.has(e.surface)){if(['motorway','trunk','primary'].includes(e.road_class))hwy+=L;continue;}const seg=pts.slice(e.begin_shape_index,e.end_shape_index+1);
     if(UNP.has(e.surface)){dirt+=L;dirtSegs.push(seg);}else if(URB.has(e.road_class)){urban+=L;urbSegs.push(seg);}
     if(['motorway','trunk','primary'].includes(e.road_class))hwy+=L;}
   return {dirt,urban,hwy,total,dirtSegs,urbSegs,limits};

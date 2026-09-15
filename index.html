@@ -524,6 +524,27 @@ async function fetchRadars(rt){
   (live||[]).forEach(x=>{if(!all.some(y=>Math.abs(y.lat-x.lat)<0.0003&&Math.abs(y.lon-x.lon)<0.0003))all.push(x);});
   return all.sort((a,b)=>a.along-b.along);
 }
+const unknownLayer=L.layerGroup().addTo(map);
+async function fetchUnknownSurface(rt){
+  const pts=rt.pts;const step=Math.max(1,Math.floor(pts.length/160));
+  const line=pts.filter((_,i)=>i%step===0||i===pts.length-1).map(p=>`${p[0].toFixed(5)},${p[1].toFixed(5)}`).join(',');
+  const q=`[out:json][timeout:12];way[highway~"^(unclassified|tertiary|tertiary_link|track|road|secondary)$"][!surface](around:25,${line});out geom;`;
+  for(const srv of ['https://overpass-api.de/api/interpreter','https://lz4.overpass-api.de/api/interpreter']){
+    const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),12000);
+    try{const r=await fetch(srv,{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'},signal:ctl.signal});
+      clearTimeout(to);if(!r.ok)throw 0;const j=await r.json();
+      let km=0,segs=[];
+      for(const w of (j.elements||[])){const g=(w.geometry||[]).map(n=>[n.lat,n.lon]);
+        // só a parte do trecho que está colada na rota
+        let cur=[];for(const pt of g){const n=nearest(pts,pt);if(n.d<30)cur.push(pt);else{if(cur.length>1)segs.push(cur);cur=[];}}
+        if(cur.length>1)segs.push(cur);}
+      for(const sg of segs)for(let i=1;i<sg.length;i++)km+=hav(sg[i-1],sg[i])/1000;
+      return {km,segs};
+    }catch(e){clearTimeout(to);}
+  }
+  return null;
+}
+function drawUnknown(){unknownLayer.clearLayers();(S.unknown&&S.unknown.segs||[]).forEach(sg=>L.polyline(sg,{color:'#F59E0B',weight:9,opacity:.9,dashArray:'2 14',lineCap:'round'}).addTo(unknownLayer));}
 function drawRadars(){radarLayer.clearLayers();(S.radars||[]).forEach(r=>L.marker([r.lat,r.lon],{icon:L.divIcon({className:'',html:`<div class="radar">${I.camera}</div>`,iconSize:[30,30],iconAnchor:[15,15]})}).addTo(radarLayer));}
 /* geometria */
 const R=6371000,rad=x=>x*Math.PI/180;
@@ -556,8 +577,9 @@ async function preview(){
   try{
     const [tr,car]=await Promise.all([route(S.origin,S.dest,'truck'),route(S.origin,S.dest,'auto').catch(()=>null)]);
     if(seq!==pvSeq)return; clearTimeout(slow);
-    S.route=tr;S.car=car;S.radars=radarsFromDB(tr);drawRadars(); drawRoute(tr,car,false);
+    S.route=tr;S.car=car;S.radars=radarsFromDB(tr);drawRadars();S.unknown=null;unknownLayer.clearLayers(); drawRoute(tr,car,false);
     renderPreviewCard();
+    fetchUnknownSurface(tr).then(u=>{if(seq!==pvSeq)return;S.unknown=u;drawUnknown();renderPreviewCard();});
     fetchRadars(tr).then(rs=>{if(seq!==pvSeq)return;S.radars=rs;drawRadars();renderPreviewCard();});
     if(car){const [xc,xt]=await Promise.all([xray(car.shape,'auto'),xray(tr.shape,'truck')]);if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};renderPreviewCard();}
   }catch(e){clearTimeout(slow);if(seq!==pvSeq)return;console.error(e);
@@ -589,11 +611,12 @@ function renderPreviewCard(){
     ${w?`<div class="badge ${w.neutral?'neutral':''}">${w.neutral?I.truck.replace('viewBox="0 0 32 24"','viewBox="0 0 32 24" width="28"'):I.shield}<span>${w.txt}</span></div>`:''}
     <button class="go" id="goBtn">${I.goArrow}<span>Ir</span></button>
     <div class="links"><button id="diffBtn" ${S.car?'':'disabled'}>Diferenças</button><button id="stepsBtn">Trajeto</button><button id="svBtn">Ver a rua</button></div>
-    <button class="big" id="markDirt">${I.dirt}<span>Passa por chão? Marcar e desviar</span></button>
+    <button class="big" id="markDirt">${I.dirt}<span>Desviar de estrada de chão</span></button>
+    ${S.unknown&&S.unknown.km>0.3?`<div class="badge" style="background:var(--warn);color:var(--warn-text)">${I.warn}<span>${fmtKm(S.unknown.km)} com piso não confirmado. Confira na rua antes de sair.</span></div>`:''}
     ${S.radars===null||S.radars===undefined?'':`<div class="badge neutral" style="min-height:44px">${I.camera}<span>${S.radars.length?S.radars.length+(S.radars.length>1?' radares':' radar')+' no caminho':'Nenhum radar conhecido no caminho'}</span></div>`}`;
   $('goBtn').onclick=startNav; $('diffBtn').onclick=openDiff; $('stepsBtn').onclick=openSteps; $('svBtn').onclick=startStreetPick; $('markDirt').onclick=startDirtPick;
 }
-$('pvBack').onclick=()=>{pvSeq++;routeLayer.clearLayers();radarLayer.clearLayers();svPick=false;show('home');recenter();};
+$('pvBack').onclick=()=>{pvSeq++;routeLayer.clearLayers();radarLayer.clearLayers();unknownLayer.clearLayers();svPick=false;show('home');recenter();};
 function openDiff(){
   const c=S.car,t=S.route,x=S.xray;
   const row=(k,a,b,cls)=>`<div>${k}</div><div class="car ${cls&&a>0?cls:''}">${a===''?'':typeof a==='number'?fmtKm(a):a}</div><div class="tr">${b===''?'':typeof b==='number'?fmtKm(b):b}</div>`;

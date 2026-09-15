@@ -252,6 +252,7 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
 <div class="sheet" id="sh-diff" role="dialog" aria-label="Ver diferenças">
   <h2>Carro x seu caminhão</h2>
   <div class="cmp" id="cmp"></div>
+  <div class="links" style="grid-template-columns:1fr 1fr"><button id="openWaze">Ver no Waze</button><button id="openGmaps">Ver no Google Maps</button></div>
   <button class="big" id="diffClose">Voltar</button>
 </div>
 <div class="sheet" id="sh-steps" role="dialog" aria-label="Passo a passo">
@@ -471,7 +472,9 @@ function decode(str,prec=6){let i=0,lat=0,lng=0,out=[],f=Math.pow(10,prec);while
 function truckOpts(){const t=S.truck;return {truck:{height:t.h,width:t.w,length:t.l,weight:t.wt,axle_load:Math.min(10,t.wt/t.ax),axle_count:t.ax,use_highways:1,use_tolls:S.toll?1:0,use_tracks:0,exclude_unpaved:true,use_living_streets:0,service_penalty:600}}}
 async function route(a,b,costing){
   const body={locations:[{lat:a.lat,lon:a.lon},{lat:b.lat,lon:b.lon}],costing,units:'kilometers',language:'pt-BR'};
-  if(costing==='truck')body.costing_options=truckOpts();
+  if(costing==='truck'){body.costing_options=truckOpts();
+    const ex=S.reports.filter(r=>['dirt','bridge','notruck','narrow'].includes(r.type)).map(r=>({lat:r.lat,lon:r.lng}));
+    if(ex.length)body.exclude_locations=ex.slice(-50);}
   const j=await post('route',body);const leg=j.trip.legs[0];
   const pts=decode(leg.shape);
   return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:leg.shape,pts,maneuvers:leg.maneuvers,cum:cumDist(pts)};
@@ -583,26 +586,30 @@ function renderPreviewCard(){
     ${w?`<div class="badge ${w.neutral?'neutral':''}">${w.neutral?I.truck.replace('viewBox="0 0 32 24"','viewBox="0 0 32 24" width="28"'):I.shield}<span>${w.txt}</span></div>`:''}
     <button class="go" id="goBtn">${I.goArrow}<span>Ir</span></button>
     <div class="links"><button id="diffBtn" ${S.car?'':'disabled'}>Diferenças</button><button id="stepsBtn">Trajeto</button><button id="svBtn">Ver a rua</button></div>
+    <button class="big" id="markDirt">${I.dirt}<span>Passa por chão? Marcar e desviar</span></button>
     ${S.radars===null||S.radars===undefined?'':`<div class="badge neutral" style="min-height:44px">${I.camera}<span>${S.radars.length?S.radars.length+(S.radars.length>1?' radares':' radar')+' no caminho':'Nenhum radar conhecido no caminho'}</span></div>`}`;
-  $('goBtn').onclick=startNav; $('diffBtn').onclick=openDiff; $('stepsBtn').onclick=openSteps; $('svBtn').onclick=startStreetPick;
+  $('goBtn').onclick=startNav; $('diffBtn').onclick=openDiff; $('stepsBtn').onclick=openSteps; $('svBtn').onclick=startStreetPick; $('markDirt').onclick=startDirtPick;
 }
 $('pvBack').onclick=()=>{pvSeq++;routeLayer.clearLayers();radarLayer.clearLayers();svPick=false;show('home');recenter();};
 function openDiff(){
   const c=S.car,t=S.route,x=S.xray;
   const row=(k,a,b,cls)=>`<div>${k}</div><div class="car ${cls&&a>0?cls:''}">${a===''?'':typeof a==='number'?fmtKm(a):a}</div><div class="tr">${b===''?'':typeof b==='number'?fmtKm(b):b}</div>`;
-  $('cmp').innerHTML=`<div class="h"></div><div class="h">Carro (Google)</div><div class="h">Seu caminhão</div>`+
+  $('cmp').innerHTML=`<div class="h"></div><div class="h">Carro (Google/Waze)</div><div class="h">Seu caminhão</div>`+
     row('Distância',fmtKm(c.km),fmtKm(t.km))+row('Tempo',fmtMin(c.min),fmtMin(t.min))+
     (x?row('Estrada de chão',x.car.dirt,x.truck.dirt,'bad')+row('Dentro de cidade',x.car.urban,x.truck.urban,'wr')+row('Rodovia',x.car.hwy,x.truck.hwy):'');
   drawRoute(t,c,true); openSheet('sh-diff');
 }
 $('diffClose').onclick=()=>{closeSheets();drawRoute(S.route,S.car,false);};
+$('openWaze').onclick=()=>{if(S.dest)window.open(`https://waze.com/ul?ll=${S.dest.lat.toFixed(6)},${S.dest.lon.toFixed(6)}&navigate=yes`,'_blank','noopener');};
+$('openGmaps').onclick=()=>{if(S.dest&&S.origin)window.open(`https://www.google.com/maps/dir/?api=1&origin=${S.origin.lat.toFixed(6)},${S.origin.lon.toFixed(6)}&destination=${S.dest.lat.toFixed(6)},${S.dest.lon.toFixed(6)}&travelmode=driving`,'_blank','noopener');};
 function openSteps(){
   $('stepsList').innerHTML=S.route.maneuvers.map((m,i)=>{const {txt,road}=manText(m);return `<div><span>${m.length>0?fmtKm(m.length):''}</span><svg viewBox="0 0 72 72" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">${A[manIcon(m.type)]}</svg><span style="flex:1">${txt}${road?` · ${esc(road)}`:''}</span><button class="sq" data-i="${i}" aria-label="Ver a rua" style="height:56px">${I.eye}</button></div>`}).join('');
   $('stepsList').querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>{const m=S.route.maneuvers[+b.dataset.i];const p=S.route.pts[m.begin_shape_index];openStreet(p[0],p[1]);});
   openSheet('sh-steps');
 }
 /* Street View do Google no ponto escolhido (abre o app do Google Maps, sem chave de API) */
-let svPick=false;
+let svPick=false, dirtPick=false;
+function startDirtPick(){dirtPick=true;closeSheets();toast('Toque no trecho de chão na rota',8000);}
 function headingAt(lat,lon){if(!S.route)return 0;const n=nearest(S.route.pts,[lat,lon]);const a=S.route.pts[n.i],b=S.route.pts[Math.min(n.i+1,S.route.pts.length-1)];const y=Math.sin(rad(b[1]-a[1]))*Math.cos(rad(b[0]));const x=Math.cos(rad(a[0]))*Math.sin(rad(b[0]))-Math.sin(rad(a[0]))*Math.cos(rad(b[0]))*Math.cos(rad(b[1]-a[1]));return (Math.atan2(y,x)*180/Math.PI+360)%360;}
 let svLast=null;
 function openStreet(lat,lon){
@@ -615,7 +622,12 @@ function openStreet(lat,lon){
 $('svClose').onclick=()=>{closeSheets();$('svFrame').src='about:blank';};
 $('svOpenApp').onclick=()=>{if(svLast)window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${svLast[0].toFixed(6)},${svLast[1].toFixed(6)}`,'_blank','noopener');};
 function startStreetPick(){svPick=true;closeSheets();toast('Toque no ponto da rota que quer ver',6000);}
-map.on('click',e=>{if(!svPick)return;svPick=false;$('toast').classList.remove('on');const n=nearest(S.route?S.route.pts:[[e.latlng.lat,e.latlng.lng]],[e.latlng.lat,e.latlng.lng]);openStreet(n.pt[0],n.pt[1]);});
+map.on('click',e=>{
+  if(dirtPick){dirtPick=false;$('toast').classList.remove('on');
+    const n=nearest(S.route.pts,[e.latlng.lat,e.latlng.lng]);
+    S.reports.push({type:'dirt',lat:n.pt[0],lng:n.pt[1],date:new Date().toISOString(),sent:navigator.onLine});store.set('reports',S.reports);drawReports();
+    toast('Marcado. Recalculando sem esse trecho...',4000);preview();return;}
+  if(!svPick)return;svPick=false;$('toast').classList.remove('on');const n=nearest(S.route?S.route.pts:[[e.latlng.lat,e.latlng.lng]],[e.latlng.lat,e.latlng.lng]);openStreet(n.pt[0],n.pt[1]);});
 $('stepsClose').onclick=closeSheets;$('stepsBtn2').onclick=()=>{closeSheets();openSteps();};
 
 /* ============ navegação ============ */

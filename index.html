@@ -124,8 +124,8 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
 
 /* prévia */
 .pv-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
-.pv-head b{font-size:40px;font-weight:700;line-height:1}
-.pv-head span{font-size:17px;font-weight:500;color:var(--muted);white-space:nowrap}
+.pv-head b{font-size:40px;font-weight:700;line-height:1;white-space:nowrap}
+.pv-head span{font-size:17px;font-weight:500;color:var(--muted);text-align:right}
 .seal{height:40px;border-radius:999px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;margin-top:12px}
 .seal span{overflow:hidden;text-overflow:ellipsis}
 .seal svg{width:18px;height:18px;flex:none}
@@ -494,7 +494,7 @@ const VH=()=>window.innerHeight;
 const px=v=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v))||0;
 const SAB=()=>px('--sab'),SAT=()=>px('--sat');
 const shSearch=new Sheet('sh-search',{open:()=>VH()-SAT()-61},{onClose:()=>{if(S.screen==='search')showHome();}});
-const shPreview=new Sheet('sh-preview',{collapsed:()=>220+SAB(),expanded:()=>Math.min(574+SAB(),VH()-SAT()-120)},{scrim:false,closable:false});
+const shPreview=new Sheet('sh-preview',{collapsed:()=>220+SAB(),expanded:()=>Math.min(24+$('pvHead').offsetHeight+$('pvBody').scrollHeight+4,VH()-SAT()-120)},{scrim:false,closable:false});
 const shDiff=new Sheet('sh-diff',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{drawRoute(S.route,S.car,false);shPreview.open('expanded');}});
 const shSteps=new Sheet('sh-steps',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');}});
 const shStreet=new Sheet('sh-street',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{$('svFrame').src='about:blank';if(S.screen==='preview')shPreview.open('expanded');}});
@@ -605,14 +605,15 @@ async function preview(){
     const [tr,car]=await Promise.all([route(S.origin,S.dest,'truck'),route(S.origin,S.dest,'auto').catch(()=>null)]);
     if(seq!==pvSeq)return;clearTimeout(slow);
     S.route=tr;S.car=car;S.radars=radarsFromDB(tr);drawRadars();drawRoute(tr,car,false);
-    shPreview.snaps.collapsed=()=>220+SAB();renderPreview();shPreview.open('collapsed');fitRoute();
-    fetchRadars(tr).then(rs=>{if(seq!==pvSeq)return;S.radars=rs;drawRadars();renderPreview();});
-    fetchUnknownSurface(tr).then(u=>{if(seq!==pvSeq)return;S.unknown=u;drawUnknown();renderPreview();});
-    if(car){const [xc,xt]=await Promise.all([xray(car.shape,'auto'),xray(tr.shape,'truck')]);if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};renderPreview();}
+    shPreview.snaps.collapsed=()=>220+SAB();renderPreview();shPreview.open('expanded');fitRoute();
+    const re=()=>{renderPreview();if(shPreview.state)shPreview.open(shPreview.state);};
+    fetchRadars(tr).then(rs=>{if(seq!==pvSeq)return;S.radars=rs;drawRadars();re();});
+    fetchUnknownSurface(tr).then(u=>{if(seq!==pvSeq)return;S.unknown=u;drawUnknown();re();});
+    if(car){const [xc,xt]=await Promise.all([xray(car.shape,'auto'),xray(tr.shape,'truck')]);if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};re();}
   }catch(e){clearTimeout(slow);if(seq!==pvSeq)return;console.error(e);
     $('pvHead').innerHTML=`<div class="calc" style="padding-top:8px">Não consegui achar uma rota de caminhão até aí. Tente outro destino.</div>`;$('pvBody').innerHTML=`<button class="btn sec" id="pvRetry" style="margin-top:12px">Voltar</button>`;$('pvRetry').onclick=showHome;}
 }
-function fitRoute(){if(!S.route)return;follow=false;const b=L.latLngBounds(S.route.pts);if(S.car)b.extend(L.latLngBounds(S.car.pts));map.fitBounds(b,{paddingTopLeft:[40,SAT()+80],paddingBottomRight:[40,shPreview.vis('collapsed')+24]});}
+function fitRoute(){if(!S.route)return;follow=false;const b=L.latLngBounds(S.route.pts);if(S.car)b.extend(L.latLngBounds(S.car.pts));map.fitBounds(b,{paddingTopLeft:[40,SAT()+80],paddingBottomRight:[40,shPreview.vis(shPreview.state||'expanded')+24]});}
 function drawRoute(tr,car,showCar){
   routeLayer.clearLayers();if(!tr)return;
   if(showCar&&car){L.polyline(car.pts,{color:'#9aa7be',weight:5,dashArray:'6 10',opacity:.9,interactive:false}).addTo(routeLayer);

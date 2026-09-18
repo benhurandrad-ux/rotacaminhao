@@ -440,7 +440,7 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
       <button class="srow" id="rowVoice"><span>Som das instruções</span><span class="sw" id="swVoice" role="switch" aria-label="Som das instruções"></span></button>
       <button class="srow" id="testVoice"><span>Voz</span><small id="voiceName"></small></button>
     </div>
-    <div class="group"><button class="srow" id="logoutBtn"><span>Sair da conta</span><small id="sessUser"></small></button></div>
+    <div class="group"><button class="srow" id="updBtn"><span>Atualizar app</span><small id="verTx"></small></button><button class="srow" id="logoutBtn"><span>Sair da conta</span><small id="sessUser"></small></button></div>
     <div class="group"><div class="srow"><small>Rota Caminhão · protótipo · R$ 60 por mês</small></div><div class="srow"><small>Mapa © OpenStreetMap · Street View © Google</small></div></div>
   </div>
 </div>
@@ -507,7 +507,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.8';
+const APP_VERSION='2026-09-18.9';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -1126,7 +1126,7 @@ async function checkUpdate(){try{const r=await fetch(location.pathname+'?v='+Dat
   let last=null;try{last=sessionStorage.getItem('upd');}catch(e){}
   if(S.screen!=='nav'&&last!==APP_VERSION){forceUpdate();return;}
   $('updNotice').classList.add('on');}}catch(e){}}
-$('updNotice').onclick=forceUpdate;
+$('updNotice').onclick=forceUpdate;$('updBtn').onclick=()=>{try{sessionStorage.removeItem('upd');}catch(e){}forceUpdate();};$('verTx').textContent='versão '+APP_VERSION;
 setTimeout(checkUpdate,1500);setInterval(checkUpdate,600000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate();});
 document.addEventListener('pointerdown',e=>{const b=e.target.closest('button,.li,.srow');if(!b)return;b.classList.add('press');const off=()=>{setTimeout(()=>b.classList.remove('press'),120);b.removeEventListener('pointerup',off);b.removeEventListener('pointercancel',off);b.removeEventListener('pointerleave',off);};b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off);},{passive:true});
 /* ===== login provisório (cadeado no aparelho; contas reais vêm com o servidor) ===== */

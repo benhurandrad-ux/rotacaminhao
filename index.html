@@ -480,7 +480,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.2';
+const APP_VERSION='2026-09-18.3';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -672,6 +672,8 @@ function pick_(p){
 
 /* ===== rota ===== */
 async function post(ep,body){const r=await fetch(`${VALHALLA}/${ep}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(ep+' '+r.status);return r.json();}
+function encode(pts,prec=6){const f=Math.pow(10,prec);let out='',la=0,lo=0;const enc=v=>{v=v<0?~(v<<1):(v<<1);let r='';while(v>=0x20){r+=String.fromCharCode((0x20|(v&0x1f))+63);v>>=5;}return r+String.fromCharCode(v+63);};
+  for(const p of pts){const a=Math.round(p[0]*f),b=Math.round(p[1]*f);out+=enc(a-la)+enc(b-lo);la=a;lo=b;}return out;}
 function decode(str,prec=6){let i=0,lat=0,lng=0,out=[],f=Math.pow(10,prec);while(i<str.length){let b,s=0,r=0;do{b=str.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lat+=(r&1)?~(r>>1):(r>>1);s=0;r=0;do{b=str.charCodeAt(i++)-63;r|=(b&0x1f)<<s;s+=5;}while(b>=0x20);lng+=(r&1)?~(r>>1):(r>>1);out.push([lat/f,lng/f]);}return out;}
 function truckOpts(){const t=S.truck;return {truck:{height:t.h,width:t.w,length:t.l,weight:t.wt,axle_load:Math.min(10,t.wt/t.ax),axle_count:t.ax,use_highways:1,use_tolls:S.toll?1:0,use_tracks:0,exclude_unpaved:true,use_living_streets:0,service_penalty:600}}}
 async function route(a,b,costing,extraEx=[]){
@@ -680,14 +682,29 @@ async function route(a,b,costing,extraEx=[]){
   const j=await post('route',body);const leg=j.trip.legs[0];const pts=decode(leg.shape);
   return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:leg.shape,pts,maneuvers:leg.maneuvers,cum:cumDist(pts)};
 }
-async function xray(shape,costing){
+async function xrayChunk(shape,costing){
   const j=await post('trace_attributes',{encoded_polyline:shape,costing,shape_match:'edge_walk',units:'kilometers',filters:{attributes:['edge.surface','edge.road_class','edge.length','edge.begin_shape_index','edge.end_shape_index','edge.speed_limit','edge.names','edge.way_id'],action:'include'}});
-  const pts=decode(j.shape||shape),UNP=new Set(['compacted','dirt','gravel','path','impassable']),URB=new Set(['residential','unclassified','service_other','living_street']);
-  let dirt=0,dirtAccess=0,urban=0,hwy=0,total=0,rough=0,dirtSegs=[],urbSegs=[],roughSegs=[],roughRanges=[],dirtRanges=[],limits=[],along=0;const routeKm=(j.edges||[]).reduce((a,e)=>a+(e.length||0),0);
-  for(const e of (j.edges||[])){const L=e.length||0;total+=L;if(e.speed_limit&&e.speed_limit<200)limits.push({b:e.begin_shape_index,e:e.end_shape_index,v:e.speed_limit});
-    const access=along<0.5||routeKm-along<0.5;along+=L;const seg=pts.slice(e.begin_shape_index,e.end_shape_index+1);
-    if(UNP.has(e.surface)){if(access)dirtAccess+=L;else{dirt+=L;dirtSegs.push(seg);const b=(along-L)*1000,en=along*1000,nm=(e.names||[])[0]||'';const last=dirtRanges[dirtRanges.length-1];if(last&&b-last.e<200){last.e=en;last.pts=last.pts.concat(seg.slice(1));if(!last.name&&nm)last.name=nm;if(e.way_id)last.ways.add(e.way_id);}else dirtRanges.push({b,e:en,name:nm,pts:seg.slice(),ways:new Set(e.way_id?[e.way_id]:[])});}}else if(e.surface==='paved_rough'){rough+=L;roughSegs.push(seg);const b=(along-L)*1000,en=along*1000;const last=roughRanges[roughRanges.length-1];if(last&&b-last.e<200)last.e=en;else roughRanges.push({b,e:en});}else if(!access&&URB.has(e.road_class)){urban+=L;urbSegs.push(seg);}
-    if(['motorway','trunk','primary'].includes(e.road_class))hwy+=L;}
+  return {edges:j.edges||[],pts:decode(j.shape||shape)};
+}
+async function xray(shape,costing){
+  const all=decode(shape),cum=cumDist(all);const MAXM=900000;
+  // fatias por índice, cada uma com no máximo 900 km
+  const slices=[];let start=0;for(let i=1;i<all.length;i++){if(cum[i]-cum[start]>MAXM||i===all.length-1){slices.push([start,i]);start=i;}}
+  if(!slices.length)slices.push([0,all.length-1]);
+  const UNP=new Set(['compacted','dirt','gravel','path','impassable']),URB=new Set(['residential','unclassified','service_other','living_street']);
+  let dirt=0,dirtAccess=0,urban=0,hwy=0,total=0,rough=0,dirtSegs=[],urbSegs=[],roughSegs=[],roughRanges=[],dirtRanges=[],limits=[],along=0;
+  const routeKm=cum[cum.length-1]/1000;
+  for(const [a,b] of slices){
+    const sub=slices.length===1?shape:encode(all.slice(a,b+1));
+    const {edges,pts}=await xrayChunk(sub,costing);const off=a;
+    for(const e of edges){const L=e.length||0;total+=L;const bi=e.begin_shape_index+off,ei=e.end_shape_index+off;
+      if(e.speed_limit&&e.speed_limit<200)limits.push({b:bi,e:ei,v:e.speed_limit});
+      const access=along<0.5||routeKm-along<0.5;along+=L;const seg=pts.slice(e.begin_shape_index,e.end_shape_index+1);
+      if(UNP.has(e.surface)){if(access)dirtAccess+=L;else{dirt+=L;dirtSegs.push(seg);const b0=(along-L)*1000,en=along*1000,nm=(e.names||[])[0]||'';const last=dirtRanges[dirtRanges.length-1];if(last&&b0-last.e<200){last.e=en;last.pts=last.pts.concat(seg.slice(1));if(!last.name&&nm)last.name=nm;if(e.way_id)last.ways.add(e.way_id);}else dirtRanges.push({b:b0,e:en,name:nm,pts:seg.slice(),ways:new Set(e.way_id?[e.way_id]:[])});}}
+      else if(e.surface==='paved_rough'){rough+=L;roughSegs.push(seg);const b0=(along-L)*1000,en=along*1000;const last=roughRanges[roughRanges.length-1];if(last&&b0-last.e<200)last.e=en;else roughRanges.push({b:b0,e:en});}
+      else if(!access&&URB.has(e.road_class)){urban+=L;urbSegs.push(seg);}
+      if(['motorway','trunk','primary'].includes(e.road_class))hwy+=L;}
+  }
   return {dirt,dirtAccess,urban,hwy,total,rough,dirtSegs,urbSegs,roughSegs,roughRanges,dirtRanges,limits};
 }
 let radarDB=null;fetch('radares.json').then(r=>r.ok?r.json():null).then(j=>{radarDB=j;}).catch(()=>{});
@@ -713,7 +730,7 @@ function headingAt(lat,lon){if(!S.route)return 0;const n=nearest(S.route.pts,[la
 
 /* desvio automático: se a rota de caminhão ainda pisa em chão fora da saída/chegada, exclui esses trechos e recalcula */
 async function avoidDirt(tr,seq){
-  let cur=tr,raw=null,x=await xray(cur.shape,'truck');S.noAlt=null;
+  let cur=tr,raw=null,x;S.noAlt=null;try{x=await xray(cur.shape,'truck');}catch(e){return null;}
   for(let round=0;round<2;round++){
     if(seq!==pvSeq)return null;
     if(x.dirt<=0.2||!x.dirtRanges.length)break;
@@ -721,7 +738,7 @@ async function avoidDirt(tr,seq){
     const pts=[];
     for(const ch of x.dirtRanges){let acc=0;for(let i=1;i<ch.pts.length;i++){acc+=hav(ch.pts[i-1],ch.pts[i]);if(acc>400){pts.push({lat:ch.pts[i][0],lon:ch.pts[i][1]});acc=0;}}const m=ch.pts[Math.floor(ch.pts.length/2)];pts.push({lat:m[0],lon:m[1]});}
     let next;try{next=await route(S.origin,S.dest,'truck',pts.slice(0,50));}catch(e){S.noAlt={km:x.dirt,name:x.dirtRanges[0].name};break;}
-    const nx=await xray(next.shape,'truck');
+    let nx;try{nx=await xray(next.shape,'truck');}catch(e){break;}
     if(nx.dirt>=x.dirt-0.2){S.noAlt={km:x.dirt,name:x.dirtRanges[0].name};break;}
     cur=next;x=nx;
   }
@@ -758,14 +775,14 @@ async function preview(){
     if(seq!==pvSeq)return;clearTimeout(slow);
     S.route=tr;S.car=car;S.raw=null;S.radars=radarsFromDB(tr);drawRadars();drawRoute(tr,car,false);
     shPreview.snaps.collapsed=()=>220+SAB();$('pvHead').style.opacity=0;$('pvBody').style.opacity=0;renderPreview();shPreview.open('expanded');requestAnimationFrame(()=>{$('pvHead').style.opacity=1;$('pvBody').style.opacity=1;});fitRoute();
-    const av=await avoidDirt(tr,seq);if(seq!==pvSeq)return;
+    let av=null;try{av=await avoidDirt(tr,seq);}catch(e){console.warn('raio-x indisponível',e);}if(seq!==pvSeq)return;
     let xt=av?av.xray:null;
     if(av&&av.route!==tr){tr=av.route;S.route=tr;S.raw=av.raw;S.radars=radarsFromDB(tr);drawRadars();drawRoute(tr,car,false);renderPreview();shPreview.open('expanded');fitRoute();}
     const re=()=>{renderPreview();if(shPreview.state)shPreview.open(shPreview.state);};
     fetchRadars(tr).then(rs=>{if(seq!==pvSeq)return;S.radars=rs;drawRadars();re();});
     fetchUnknownSurface(tr).then(u=>{if(seq!==pvSeq)return;S.unknown=u;drawUnknown();re();});
-    if(car){const xc=await xray(car.shape,'auto');if(seq!==pvSeq)return;if(!xt)xt=await xray(tr.shape,'truck');if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};re();}else if(xt){S.xray={car:null,truck:xt};}
-    if(xt){await verifyDirt(xt);if(seq!==pvSeq)return;re();}
+    try{if(car){const xc=await xray(car.shape,'auto');if(seq!==pvSeq)return;if(!xt)xt=await xray(tr.shape,'truck');if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};re();}else if(xt){S.xray={car:null,truck:xt};}}catch(e){console.warn('raio-x indisponível',e);if(seq!==pvSeq)return;if(xt)S.xray={car:null,truck:xt};}
+    if(xt){try{await verifyDirt(xt);}catch(e){}if(seq!==pvSeq)return;re();}
     drawDirtOnMap();
   }catch(e){clearTimeout(slow);if(seq!==pvSeq)return;console.error(e);
     $('pvHead').innerHTML=`<div class="calc" style="padding-top:8px">Não consegui achar uma rota de caminhão até aí. Tente outro destino.</div>`;$('pvBody').innerHTML=`<button class="btn sec" id="pvRetry" style="margin-top:12px">Voltar</button>`;$('pvRetry').onclick=showHome;}
@@ -816,7 +833,7 @@ function renderPreview(){
 }
 $('pvBack').onclick=()=>{pvSeq++;showHome();};
 function openDiff(){
-  const c=S.car,t=S.route,x=S.xray;
+  const c=S.car,t=S.route,x=(S.xray&&S.xray.car&&S.xray.truck)?S.xray:null;
   const eye=(side,kind,v)=>v>0.05?`<button class="eyeb" data-see="${side}:${kind}" aria-label="Ver no mapa">${I.eye}</button>`:'';
   const row=(k,a,b,cls,kind,lowerWins=true)=>{const num=typeof a==='number'&&typeof b==='number';const diff=num?a-b:0;const tWins=num&&Math.abs(diff)>0.05&&(lowerWins?b<a:b>a);const cWins=num&&Math.abs(diff)>0.05&&(lowerWins?a<b:a>b);
     return `<div>${k}</div><div class="car ${cWins?'win':(tWins&&cls?cls:'')}"><span class="v">${num?fmtKm(a):a}${kind?eye('car',kind,a):''}</span></div><div class="tr ${tWins?'win':''}"><span class="v">${num?fmtKm(b):b}${kind?eye('truck',kind,b):''}</span></div>`;};

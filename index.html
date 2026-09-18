@@ -227,6 +227,10 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
 .speed{position:absolute;right:16px;bottom:calc(var(--sab) + 112px);width:56px;height:56px;border-radius:50%;background:#fff;border:4px solid #E5484D;color:#0B1220;display:none;place-items:center;font-size:22px;font-weight:700;box-shadow:var(--shadow)}
 .speed.on{display:grid}
 .speed.over{background:#E5484D;color:#fff}
+.nav-alert{position:absolute;left:16px;bottom:calc(var(--sab) + 112px);z-index:21;width:64px;height:56px;border-radius:18px;background:var(--danger);color:#fff;display:none;align-items:center;justify-content:center;gap:6px;box-shadow:var(--shadow);font-weight:700;font-size:20px}
+.nav-alert.on{display:flex}
+.nav-alert svg{width:24px;height:24px}
+.nav-alert.wr{background:var(--warn);color:var(--on-warn)}
 .nav-center{position:absolute;right:16px;bottom:calc(var(--sab) + 180px);opacity:0;visibility:hidden;transition:opacity .15s,visibility 0s .15s}
 .nav-center.on{opacity:1;visibility:visible;transition:opacity .15s,visibility 0s}
 .tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
@@ -333,6 +337,7 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
   <div class="speed" id="speed" aria-label="Limite de velocidade"></div>
   <div class="card nav-spd" id="spdNav" aria-label="Velocidade atual"><span id="spdNavV">0</span><small>km/h</small></div>
   <button class="card round nav-center" id="navCenter" aria-label="Centralizar"></button>
+  <button class="nav-alert" id="navAlert" aria-label="Ver alertas da rota"><span id="icAlert"></span><b id="navAlertN">0</b></button>
   <div class="card nav-bot">
     <button class="eta" id="etaBtn" aria-label="Opções da viagem"><b id="etaTime">--:--</b><span id="etaSub"></span></button>
     <div class="rbtns">
@@ -392,7 +397,8 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
   <div class="handle"></div>
   <div class="titlebar"><h2>Viagem</h2><button class="round xs inner" data-close aria-label="Fechar"></button></div>
   <div class="body stack">
-    <button class="btn sec" id="stepsBtn2">Passo a passo</button>
+    <div class="row3"><button class="btn sec" id="diffBtn2">Diferenças</button><button class="btn sec" id="stepsBtn2">Trajeto</button><button class="btn sec" id="svBtn2">Ver rua</button></div>
+    <button class="btn sec" id="alertsBtn2">Alertas da rota</button>
     <button class="btn sec" id="voiceBtn">Som ligado</button>
     <button class="btn sec" id="simBtn">Simular viagem (teste)</button>
     <button class="btn danger" id="leaveBtn">Sair da rota</button>
@@ -501,7 +507,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.7';
+const APP_VERSION='2026-09-18.8';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -615,7 +621,7 @@ const shSearch=new Sheet('sh-search',{open:()=>VV()-SAT()-61},{onClose:()=>{if(S
 function setVVH(){const vv=window.visualViewport;const h=vv?Math.round(vv.height):VH();document.documentElement.style.setProperty('--vvh',h+'px');if(vv)shSearch.el.style.top=Math.round(vv.offsetTop)+'px';if(vv&&vv.offsetTop>0&&S.screen==='search')unscroll();}
 setVVH();if(window.visualViewport){window.visualViewport.addEventListener('resize',setVVH);window.visualViewport.addEventListener('scroll',setVVH);}window.addEventListener('resize',setVVH);
 const shPreview=new Sheet('sh-preview',{collapsed:()=>220+SAB(),expanded:()=>Math.min(24+$('pvHead').offsetHeight+$('pvBody').scrollHeight+4,VH()-SAT()-120)},{scrim:false,closable:false});
-const shDiff=new Sheet('sh-diff',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{drawRoute(S.route,S.car,false);shPreview.open('expanded');}});
+const shDiff=new Sheet('sh-diff',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{drawRoute(S.route,S.car,false);if(S.screen==='preview')shPreview.open('expanded');}});
 const shSteps=new Sheet('sh-steps',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');}});
 const shStreet=new Sheet('sh-street',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{$('svFrame').src='about:blank';svKind=null;if(S.screen==='preview')shPreview.open('expanded');}});
 const shReport=new Sheet('sh-report',{open:()=>416+SAB()},{light:true});
@@ -636,7 +642,7 @@ function renderTruckGrid(){
 }
 $('obAdjust').onclick=()=>{if(!S.truck){S.truck={...TRUCKS[3]};store.set('truck',S.truck);}$('ob').classList.remove('on');renderChip();openSettings();};
 function renderChip(){$('chip').innerHTML=`${I.truck}<span>${S.truck?S.truck.name:'Caminhão'}</span>`;$('setTruckName').innerHTML=S.truck?`${S.truck.name} · ${fmt1(S.truck.h)} m · ${fmt1(S.truck.wt)} t`:'';}
-['icSearch','icSearch2'].forEach(id=>$(id).innerHTML=I.search);$('centerBtn').innerHTML=I.center;$('navCenter').innerHTML=I.center;$('icWarn').innerHTML=I.warn;$('icEye').innerHTML=I.eye;
+['icSearch','icSearch2'].forEach(id=>$(id).innerHTML=I.search);$('centerBtn').innerHTML=I.center;$('navCenter').innerHTML=I.center;$('icWarn').innerHTML=I.warn;$('icEye').innerHTML=I.eye;$('icAlert').innerHTML=I.warn;$('diffBtn2').innerHTML=I.diff+'Diferenças';$('stepsBtn2').innerHTML=I.list+'Trajeto';$('svBtn2').innerHTML=I.eye+'Ver rua';$('alertsBtn2').innerHTML=I.warn+'Alertas da rota';
 $('searchBack').innerHTML=I.back;$('updGo').innerHTML=I.go;$('pvBack').innerHTML=I.back;$('noticeX').innerHTML=I.x;$('pickCancel').innerHTML=I.x;$('qClear').innerHTML=I.x;$('arrIc').innerHTML=I.check;
 document.querySelectorAll('[data-close]').forEach(b=>b.innerHTML=I.x);
 $('chip').onclick=openSettings;
@@ -784,6 +790,23 @@ function openRules(){const R=S.rules;if(!R)return;const th=(S.truck&&S.truck.h)|
   if(R.federal.length){h+=`<h3>Feriado · rodovias federais (PRF)</h3>`+R.federal.map(f=>`<div class="it bad"><div class="tx"><b>${esc(f.name)} · ${f.date.split('-').reverse().slice(0,2).join('/')} ${fmtH(f.from)} às ${fmtH(f.to)}</b><small>Proibido rodar em BR de pista simples. Multa e caminhão retido até o fim do horário.${f.ufs?' Vale em '+f.ufs.join(', ')+'.':''}</small></div></div>`).join('')+`<div class="note">Vale para veículo acima de 2,60 m de largura, 4,40 m de altura, 19,80 m de comprimento ou 58,5 t, e para bitrem, rodotrem e cegonha. Não vale no AC, AM, AP, PA e RR.</div>`;}
   else if(truckBig())h+=`<h3>Feriado · PRF</h3><div class="note" style="margin-top:4px">Nenhuma restrição de feriado no horário desta viagem.</div>`;
   $('rulesTitle').textContent='Restrições na rota';$('rulesBody').innerHTML=h;bindRuleSeals($('rulesBody'));if(S.screen==='preview')shPreview.close(true);shRules.open();}
+function alertList(fromAlong){const R=S.rules||{viaducts:[],cities:[],federal:[]},x=S.xray&&S.xray.truck,out=[],th=(S.truck&&S.truck.h)||4.4;
+  R.viaducts.forEach((v,i)=>{if(!v.lvl)return;out.push({along:v.along,lvl:v.lvl,ic:'bridge',t:v.h?`Viaduto de ${fmtHt(v.h)}${v.lvl==='bad'?' · não passa':' · justo'}`:'Viaduto baixo, altura não informada',s:`${v.name?esc(v.name)+' · ':''}seu caminhão ${fmtHt(th)}`,see:()=>seeViaduct(i)});});
+  R.cities.forEach(c=>{if(!c.active)return;const eh=`${String(c.eta.getHours()).padStart(2,'0')}:${String(c.eta.getMinutes()).padStart(2,'0')}`;out.push({along:c.along,lvl:'bad',ic:'noTruck',t:`${esc(c.c.name)}: caminhão proibido até ${fmtH(c.r.to)}`,s:`${esc(c.c.zone)} · chega às ${eh}`});});
+  R.federal.forEach(f=>out.push({along:0,lvl:'bad',ic:'warn',t:`PRF: proibido ${fmtH(f.from)} às ${fmtH(f.to)}`,s:`${esc(f.name)} · BR de pista simples`}));
+  (x&&x.dirtRanges||[]).forEach(g=>out.push({along:g.b,lvl:g.suspect?'wr':'bad',ic:'dirt',t:g.suspect?`Marcado como chão no mapa, ${fmtKm((g.e-g.b)/1000)}`:`Estrada de chão por ${fmtKm((g.e-g.b)/1000)}`,s:g.name?esc(g.name):(g.suspect?'Provável erro do mapa':'Sem alternativa por asfalto'),see:()=>seeDirt('dirt')}));
+  (x&&x.roughRanges||[]).forEach(g=>out.push({along:g.b,lvl:'wr',ic:'warn',t:`Asfalto ruim por ${fmtKm((g.e-g.b)/1000)}`,s:g.name?esc(g.name):'',see:()=>seeDirt('rough')}));
+  if(S.route)S.reports.forEach(rep=>{const nn=nearest(S.route.pts,[rep.lat,rep.lng]);if(nn.d>150)return;const a=S.route.cum[nn.i]+(S.route.cum[nn.i+1]-S.route.cum[nn.i])*nn.t;const t=REPORT_TYPES.find(q=>q.id===rep.type);if(!t||t.hidden)return;out.push({along:a,lvl:'wr',ic:t.ic,t:`${t.label} (relatado)`,s:fmtDate(rep.date),see:()=>openStreet(rep.lat,rep.lng)});});
+  return out.filter(a=>a.along>=(fromAlong||0)-100).sort((a,b)=>a.along-b.along);}
+function curAlong(){if(!S.route||!S.pos||S.screen!=='nav')return 0;const n=nearest(S.route.pts,[S.pos.lat,S.pos.lon]);return S.route.cum[n.i]+(S.route.cum[n.i+1]-S.route.cum[n.i])*n.t;}
+function openAlerts(){const from=curAlong();const list=alertList(from);const nav=S.screen==='nav';
+  $('rulesTitle').textContent='Alertas da rota';
+  $('rulesBody').innerHTML=list.length?`<div style="height:8px"></div>`+list.map((a,i)=>`<div class="it ${a.lvl}"><span class="ic" style="width:40px;height:40px;border-radius:50%;background:${a.lvl==='bad'?'var(--danger-soft)':'var(--warn-soft)'};color:${a.lvl==='bad'?'var(--on-danger-soft)':'var(--on-warn-soft)'};display:grid;place-items:center;flex:none">${I[a.ic]||I.warn}</span><div class="tx"><b>${a.t}</b><small>${a.along>0?(nav?'em ':'km ')+(nav?fmtM(Math.max(0,a.along-from)):Math.round(a.along/1000)):'toda a viagem'}${a.s?' · '+a.s:''}</small></div>${a.see?`<button class="eyeb" data-al="${i}" aria-label="Ver">${I.eye}</button>`:''}</div>`).join('')+`<div class="note">Toque no olho para ver o ponto na rua.</div>`
+    :`<div class="note" style="margin-top:12px">Nenhum alerta ${nav?'daqui até o destino':'nesta rota'}. Só asfalto, sem viaduto baixo e sem horário proibido.</div>`;
+  $('rulesBody').querySelectorAll('[data-al]').forEach(b=>b.onclick=()=>{const a=list[+b.dataset.al];if(a.see)a.see();});
+  $('rulesBody').querySelectorAll('.it .ic svg').forEach(v=>{v.style.width='20px';v.style.height='20px';});
+  if(S.screen==='preview')shPreview.close(true);shRules.open();}
+function updAlertBadge(){const b=$('navAlert');if(S.screen!=='nav'){b.classList.remove('on');return;}const list=alertList(curAlong());b.classList.toggle('on',list.length>0);b.classList.toggle('wr',list.length>0&&!list.some(a=>a.lvl==='bad'));$('navAlertN').textContent=list.length;}
 function renderCalNext(){if(!RULES)return;const t=nowMs();const nx=RULES.federal.windows.map(w=>{const [y,m,d]=w[0].split('-').map(Number);return {w,a:new Date(y,m-1,d,w[1]).getTime()};}).find(x=>x.a>t-6*3600000);const el=$('calNext');if(el)el.textContent=nx?`próximo ${nx.w[0].split('-').reverse().slice(0,2).join('/')}`:'';}
 function openCal(){if(!RULES)return;const t=nowMs();const rows=RULES.federal.windows.filter(w=>{const [y,m,d]=w[0].split('-').map(Number);return new Date(y,m-1,d,w[2]).getTime()>t;});
   const byName=[];for(const w of rows){let g=byName.find(x=>x.name===w[3]);if(!g){g={name:w[3],ufs:w[4]||null,items:[]};byName.push(g);}g.items.push(w);}
@@ -941,6 +964,10 @@ function openSteps(){
   shSteps.open();
 }
 $('stepsBtn2').onclick=()=>{shTrip.close(true);openSteps();};
+$('diffBtn2').onclick=()=>{shTrip.close(true);if(S.car)openDiff();else openSteps();};
+$('svBtn2').onclick=()=>{shTrip.close(true);$('svNavBtn').onclick();};
+$('alertsBtn2').onclick=()=>{shTrip.close(true);openAlerts();};
+$('navAlert').onclick=openAlerts;
 
 /* escolher ponto no mapa (ver rua / marcar chão) */
 let pick=null;
@@ -976,7 +1003,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 function startNav(){
   S.navi={sim:false,speed:0,started:Date.now(),evDirt:0,evUrban:0,from:(S.origin&&S.origin.name)||'Posição atual',to:S.dest?S.dest.name:'',km:S.route.km,min:S.route.min,startPos:S.pos?{lat:S.pos.lat,lon:S.pos.lon}:null,dest:S.dest,origin:S.origin};const w=bestWin();if(w){S.navi.evDirt=w.dirt||0;S.navi.evUrban=w.urban||0;}
   spoken=new Set();offCount=0;follow=true;keepAwake();
-  S.screen='nav';layer('l-nav');closeAll();unknownLayer.clearLayers();drawRoute(S.route,S.car,false);smooth.lat=S.pos.lat;smooth.lon=S.pos.lon;posMarker.setLatLng([S.pos.lat,S.pos.lon]);navZoom=16;focusPos(true);navTick();
+  S.screen='nav';layer('l-nav');closeAll();unknownLayer.clearLayers();drawRoute(S.route,S.car,false);updAlertBadge();smooth.lat=S.pos.lat;smooth.lon=S.pos.lon;posMarker.setLatLng([S.pos.lat,S.pos.lon]);navZoom=16;focusPos(true);navTick();
   const fed=S.rules&&S.rules.federal&&S.rules.federal[0];
   if(S.voice)speak(`Vamos lá. ${fmtKm(S.route.km).replace(' km',' quilômetros')} até ${S.dest.name}, só por asfalto.`+(fed?` Atenção: ${fed.name}, caminhão grande proibido em rodovia federal de pista simples das ${fed.from} às ${fed.to} horas.`:''));
   if(fed)setTimeout(()=>setState(`PRF: proibido ${fmtH(fed.from)} às ${fmtH(fed.to)} em BR de pista simples`,'danger',15000,'info','',I.warn),1500);
@@ -988,7 +1015,7 @@ function onlineBack(){if(S.screen==='nav'&&stateKind==='net')clearState();}
 function saveTrip(done){const n=S.navi;if(!n||n.sim&&!done)return;const t={date:new Date().toISOString(),from:n.from,to:n.to,km:Math.round(n.km),min:Math.round(n.min),done:!!done,evDirt:n.evDirt||0,evUrban:n.evUrban||0,dest:n.dest?{lat:n.dest.lat,lon:n.dest.lon,name:n.dest.name}:null};
   S.trips=[t,...S.trips].slice(0,50);store.set('trips',S.trips);}
 function stopNav(){try{wake&&wake.release();wake=null;}catch(e){}clearInterval(navTimer);clearInterval(simTimer);simTimer=null;S.navi=null;try{speechSynthesis.cancel();}catch(e){}
-  routeLayer.clearLayers();radarLayer.clearLayers();$('speed').classList.remove('on');clearState();window.removeEventListener('online',onlineBack);window.removeEventListener('offline',offlineNow);}
+  routeLayer.clearLayers();radarLayer.clearLayers();$('speed').classList.remove('on');$('navAlert').classList.remove('on');clearState();window.removeEventListener('online',onlineBack);window.removeEventListener('offline',offlineNow);}
 const PRI={recalc:6,gps:5,net:4,sent:3,bridge:3,zone:2,radar:2,report:1,dirt:1,rough:1,next:0,info:0};
 function setState(txt,cls,ms,kind='info',extra='',ic=''){
   if(stateKind&&PRI[stateKind]>PRI[kind])return;
@@ -1025,6 +1052,7 @@ function navTick(){
   else if(['bridge','zone','radar','report','dirt','rough','next'].includes(stateKind))clearState();
   const lim=(S.xray&&S.xray.truck.limits||[]).find(l=>n.i>=l.b&&n.i<l.e);curLimit=lim?lim.v:null;const sp=$('speed');sp.textContent=lim?lim.v:'';sp.classList.toggle('on',!!lim);sp.classList.toggle('over',!!lim&&(S.pos.speed||0)>=lim.v+5);showSpeed();
   if(S.voice){const key=mi+':'+(dist<250?'b':dist<1200?'a':'');if(dist<1200&&!spoken.has(key)){spoken.add(key);speak((dist<250?'':`Em ${fmtM(dist).replace(' m',' metros').replace(' km',' quilômetros')}, `)+txt.toLowerCase()+(road?` na ${road}`:''));}}
+  if((navTick.n=(navTick.n||0)+1)%5===1)updAlertBadge();
   const total=r.cum[r.cum.length-1]||1;const minLeft=r.min*(remaining/total);
   $('etaTime').textContent=fmtETA(minLeft);$('etaSub').textContent=`${fmtMin(minLeft)} · ${fmtKm(remaining/1000)}`;
 }
@@ -1034,7 +1062,7 @@ if(window.speechSynthesis){pickVoice();speechSynthesis.onvoiceschanged=pickVoice
 function speak(t){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='pt-BR';if(ptVoice)u.voice=ptVoice;u.rate=1.02;speechSynthesis.speak(u);}catch(e){}}
 async function recalc(){
   S.navi.recalc=true;setState('Recalculando...','acc',0,'recalc');if(S.voice)speak('Recalculando a rota.');
-  try{const tr=await route(S.pos,S.dest,'truck');S.route=tr;S.origin={...S.pos};S.rules=checkRules(tr);drawRoute(tr,null,false);spoken=new Set();offCount=0;fetchRadars(tr).then(rs=>{S.radars=rs;drawRadars();});xray(tr.shape,'truck').then(x=>{S.xray=S.xray||{};S.xray.truck=x;}).catch(()=>{});}
+  try{const tr=await route(S.pos,S.dest,'truck');S.route=tr;S.origin={...S.pos};S.rules=checkRules(tr);drawRoute(tr,null,false);spoken=new Set();offCount=0;fetchRadars(tr).then(rs=>{S.radars=rs;drawRadars();});xray(tr.shape,'truck').then(x=>{S.xray=S.xray||{};S.xray.truck=x;updAlertBadge();}).catch(()=>{});}
   catch(e){}
   S.navi.recalc=false;clearState();navTick();
 }

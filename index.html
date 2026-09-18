@@ -120,6 +120,11 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
 
 /* busca */
 .searchbar{display:flex;gap:12px;align-items:center;padding:0 16px 12px}
+/* busca: painel ancorado no topo, altura = área visível acima do teclado */
+#sh-search{top:0;bottom:auto;height:var(--vvh,100%);border-radius:0;border-top:0;box-shadow:none;padding-top:calc(var(--sat) + 8px);transform:translateY(-10px);opacity:0;clip-path:none;transition:opacity .18s ease-out,transform .18s ease-out,visibility 0s .18s}
+#sh-search.on{transform:none;opacity:1;clip-path:none;transition:opacity .18s ease-out,transform .18s ease-out,visibility 0s}
+#sh-search .handle{display:none}
+#sh-search .body{padding-bottom:12px}
 .field{flex:1;height:56px;border-radius:18px;background:var(--inner);display:flex;align-items:center;gap:10px;padding:0 8px 0 16px;min-width:0}
 .field svg{width:22px;height:22px;color:var(--muted);flex:none}
 .field input{-webkit-appearance:none;appearance:none;flex:1;min-width:0;border:0;background:transparent;font:inherit;font-size:18px;font-weight:500;color:var(--text);outline:none;height:100%}
@@ -496,7 +501,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.6';
+const APP_VERSION='2026-09-18.7';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -607,7 +612,8 @@ const px=v=>parseFloat(getComputedStyle(document.documentElement).getPropertyVal
 const SAB=()=>px('--sab'),SAT=()=>px('--sat');
 const VV=()=>(window.visualViewport&&window.visualViewport.height)||VH();
 const shSearch=new Sheet('sh-search',{open:()=>VV()-SAT()-61},{onClose:()=>{if(S.screen==='search')showHome();}});
-if(window.visualViewport)window.visualViewport.addEventListener('resize',()=>{if(shSearch.state)shSearch.el.style.setProperty('--vis',shSearch.vis('open')+'px');});
+function setVVH(){const vv=window.visualViewport;const h=vv?Math.round(vv.height):VH();document.documentElement.style.setProperty('--vvh',h+'px');if(vv)shSearch.el.style.top=Math.round(vv.offsetTop)+'px';if(vv&&vv.offsetTop>0&&S.screen==='search')unscroll();}
+setVVH();if(window.visualViewport){window.visualViewport.addEventListener('resize',setVVH);window.visualViewport.addEventListener('scroll',setVVH);}window.addEventListener('resize',setVVH);
 const shPreview=new Sheet('sh-preview',{collapsed:()=>220+SAB(),expanded:()=>Math.min(24+$('pvHead').offsetHeight+$('pvBody').scrollHeight+4,VH()-SAT()-120)},{scrim:false,closable:false});
 const shDiff=new Sheet('sh-diff',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{drawRoute(S.route,S.car,false);shPreview.open('expanded');}});
 const shSteps=new Sheet('sh-steps',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');}});
@@ -651,7 +657,7 @@ function localSearch(q){
   return {hits:exact.slice(0,6),suggest};
 }
 let searchMode='dest',qTimer=null,searchSeq=0;
-function openSearch(mode){searchMode=mode;S.screen='search';layer('l-home');$('q').value='';$('qClear').classList.remove('on');$('q').placeholder=mode==='dest'?'Cidade, endereço ou rodovia':'Sair de onde?';renderResults([]);shSearch.open();$('q').focus({preventScroll:true});}
+function openSearch(mode){searchMode=mode;S.screen='search';layer('l-home');$('q').value='';$('qClear').classList.remove('on');$('q').placeholder=mode==='dest'?'Cidade, endereço ou rodovia':'Sair de onde?';renderResults([]);setVVH();shSearch.open();$('q').focus({preventScroll:true});}
 $('searchBack').onclick=()=>shSearch.close();
 $('qClear').onclick=()=>{$('q').value='';$('qClear').classList.remove('on');renderResults([]);$('q').focus({preventScroll:true});};
 $('q').addEventListener('input',()=>{clearTimeout(qTimer);const v=$('q').value.trim();$('qClear').classList.toggle('on',v.length>0);if(v.length<2){renderResults([]);return;}const loc=localSearch(v);renderResults(loc.hits.map(cityRow),true,loc.suggest,true);if(v.length<3)return;qTimer=setTimeout(()=>doSearch(v),450);});

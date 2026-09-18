@@ -368,7 +368,7 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
       <div class="srow"><span>Som das instruções</span><button class="sw" id="swVoice" role="switch" aria-label="Som das instruções"></button></div>
       <button class="srow" id="testVoice"><span>Voz</span><small id="voiceName"></small></button>
     </div>
-    <div class="group"><div class="srow"><small>Rota Caminhão · protótipo · R$ 60 por mês</small></div></div>
+    <div class="group"><div class="srow"><small>Rota Caminhão · protótipo · R$ 60 por mês</small></div><div class="srow"><small>Mapa © OpenStreetMap · Street View © Google</small></div></div>
   </div>
 </div>
 
@@ -434,7 +434,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-17.3';
+const APP_VERSION='2026-09-17.4';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -459,7 +459,7 @@ function applyTheme(){let t=S.theme;if(t==='auto'){const h=new Date().getHours()
 applyTheme();setInterval(applyTheme,60000);
 
 /* ===== mapa ===== */
-const map=L.map('map',{zoomControl:false,attributionControl:true,tap:false}).setView([DEFAULT_POS.lat,DEFAULT_POS.lon],13);
+const map=L.map('map',{zoomControl:false,attributionControl:false,tap:false}).setView([DEFAULT_POS.lat,DEFAULT_POS.lon],13);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
 const routeLayer=L.layerGroup().addTo(map),reportLayer=L.layerGroup().addTo(map),radarLayer=L.layerGroup().addTo(map),unknownLayer=L.layerGroup().addTo(map);
 const TRUCK_SVG=`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">

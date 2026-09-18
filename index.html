@@ -129,6 +129,8 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
 .seal{height:40px;border-radius:999px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;margin-top:12px}
 .seal span{overflow:hidden;text-overflow:ellipsis}
 .seal svg{width:18px;height:18px;flex:none}
+.seal .eyeb,.state .eyeb{margin-left:auto;width:36px;height:36px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.08);flex:none;padding:0}
+.seal .eyeb svg,.state .eyeb svg{width:18px;height:18px}
 .seal.neutral{background:var(--inner);color:var(--text)}
 .seal.acc{background:var(--accent-soft);color:var(--accent)}
 .seal.warn{background:var(--warn-soft);color:var(--on-warn-soft)}
@@ -658,18 +660,20 @@ function renderPreview(){
   const na=S.xray&&S.xray.truck.dirt>0.2?{cls:'warn',ic:'warn',txt:`${fmtKm(S.xray.truck.dirt)} de chão sem alternativa${S.xray.truck.dirtRanges[0]&&S.xray.truck.dirtRanges[0].name?' · '+esc(S.xray.truck.dirtRanges[0].name):''}`}:null;
   const seal=na||(unk?{cls:'warn',ic:'warn',txt:`${fmtKm(S.unknown.km)} com piso não confirmado`}:(w||{cls:'neutral',ic:'truck',txt:'Rota de caminhão'}));
   $('pvHead').innerHTML=`<div class="pv-head"><b>${fmtMin(r.min)}</b><span>${fmtKm(r.km)} · Chega ${fmtETA(r.min)}</span></div>
-    <div class="seal ${seal.cls}">${I[seal.ic]}<span>${seal.txt}</span></div>
+    <div class="seal ${seal.cls}">${I[seal.ic]}<span>${seal.txt}</span>${na?`<button class="eyeb" id="seeDirtSeal" aria-label="Ver a estrada de chão">${I.eye}</button>`:''}</div>
     <button class="btn go" id="goBtn" style="margin:16px 0 12px">${I.go}<span>Ir</span></button>`;
   const chips=[];
   if(S.radars)chips.push(`<div class="seal neutral">${I.camera}<span>${S.radars.length?S.radars.length+(S.radars.length>1?' radares':' radar'):'Sem radar conhecido'}</span></div>`);
   if(unk)chips.push(`<div class="seal warn">${I.warn}<span>${fmtKm(S.unknown.km)} com piso não confirmado</span></div>`);
-  if(S.xray&&S.xray.truck.rough>0.3)chips.push(`<div class="seal warn">${I.warn}<span>${fmtKm(S.xray.truck.rough)} de asfalto ruim</span></div>`);
+  if(S.xray&&S.xray.truck.rough>0.3)chips.push(`<div class="seal warn">${I.warn}<span>${fmtKm(S.xray.truck.rough)} de asfalto ruim</span><button class="eyeb" id="seeRough" aria-label="Ver o asfalto ruim">${I.eye}</button></div>`);
   if(w&&w.cls==='acc'&&unk)chips.push(`<div class="seal acc">${I.shield}<span>${w.txt}</span></div>`);
   $('pvBody').innerHTML=`<div class="stack" style="padding-top:4px">
     ${chips.length?`<div class="chips">${chips.join('')}</div>`:''}
     <div class="row3"><button class="btn sec" id="diffBtn" ${S.car?'':'disabled'}>${I.diff}Diferenças</button><button class="btn sec" id="stepsBtn">${I.list}Trajeto</button><button class="btn sec" id="svBtn">${I.eye}Ver rua</button></div>
     <button class="btn outline" id="markDirt">${I.dirt}Desviar de chão</button>
     ${unk?'<div class="tag" style="text-align:center">Confira na rua antes de sair.</div>':''}</div>`;
+  const sd=$('seeDirtSeal');if(sd)sd.onclick=e=>{e.stopPropagation();seeDirt('dirt');};
+  const sr=$('seeRough');if(sr)sr.onclick=e=>{e.stopPropagation();seeDirt('rough');};
   $('goBtn').onclick=startNav;$('diffBtn').onclick=openDiff;$('stepsBtn').onclick=openSteps;$('svBtn').onclick=()=>startPick('street');$('markDirt').onclick=()=>startPick('dirt');
 }
 $('pvBack').onclick=()=>{pvSeq++;showHome();};
@@ -678,7 +682,7 @@ function openDiff(){
   $('cmp').innerHTML=`<div class="h"></div><div class="h">Carro (Google/Waze)</div><div class="h">Seu caminhão</div>`+row('Distância',fmtKm(c.km),fmtKm(t.km))+row('Tempo',fmtMin(c.min),fmtMin(t.min))+
     (x?row('Estrada de chão',x.car.dirt,x.truck.dirt,'bad')+row('Asfalto ruim',x.car.rough,x.truck.rough,'wr')+row('Dentro de cidade',x.car.urban,x.truck.urban,'wr')+row('Rodovia',x.car.hwy,x.truck.hwy):'');
   const acc=$('accessNote');const da=x?Math.max(x.truck.dirtAccess||0,0):0;const nd=x?x.truck.dirt:0;
-  if(nd>0.2){acc.style.display='flex';acc.innerHTML=`${I.warn}<span>${fmtKm(nd)} de chão sem alternativa por asfalto${x.truck.dirtRanges[0]&&x.truck.dirtRanges[0].name?' ('+esc(x.truck.dirtRanges[0].name)+')':''}. Tentei contornar e não existe outro caminho.</span>`;}
+  if(nd>0.2){acc.style.display='flex';acc.innerHTML=`${I.warn}<span>${fmtKm(nd)} de chão sem alternativa por asfalto${x.truck.dirtRanges[0]&&x.truck.dirtRanges[0].name?' ('+esc(x.truck.dirtRanges[0].name)+')':''}. Tentei contornar e não existe outro caminho.</span><button class="eyeb" id="seeDirtDiff" aria-label="Ver a estrada de chão">${I.eye}</button>`;$('seeDirtDiff').onclick=()=>seeDirt('dirt');}
   else if(da>0.05){acc.style.display='flex';acc.innerHTML=`${I.warn}<span>Saída ou chegada em ${fmtKm(da)} de chão. É a rua do endereço, não dá para evitar.</span>`;}else acc.style.display='none';
   const det=$('detour');if(S.raw){const ex=S.route.km-S.raw.route.km,em=S.route.min-S.raw.route.min;det.style.display='flex';det.innerHTML=`${I.shield}<span>Pelo chão seriam ${fmtKm(S.raw.route.km)} e ${fmtMin(S.raw.route.min)}. Contornando: ${ex>=0?'+':''}${fmtKm(ex)} e ${em>=0?'+':''}${fmtMin(Math.abs(em))}, sem ${fmtKm(S.raw.xray.dirt)} de chão.</span>`;}else det.style.display='none';
   drawRoute(t,c,true);shDiff.open();
@@ -700,6 +704,7 @@ $('pickCancel').onclick=endPick;
 map.on('click',e=>{if(!pick||!S.route)return;const n=nearest(S.route.pts,[e.latlng.lat,e.latlng.lng]);const kind=pick;pick=null;$('pickNotice').classList.remove('on');
   if(kind==='street'){openStreet(n.pt[0],n.pt[1]);return;}
   S.reports.push({type:'dirt',lat:n.pt[0],lng:n.pt[1],date:new Date().toISOString(),sent:navigator.onLine});store.set('reports',S.reports);drawReports();preview();});
+function seeDirt(kind){const x=S.xray&&S.xray.truck;if(!x)return;const r=kind==='rough'?(x.roughSegs[0]&&x.roughSegs[0][0]):(x.dirtRanges[0]&&x.dirtRanges[0].pts[0]);if(r){$('svTitle').textContent=kind==='rough'?'Asfalto ruim':'Estrada de chão';openStreet(r[0],r[1]);}}
 let svLast=null;
 function openStreet(lat,lon){svLast=[lat,lon];
   if(!GOOGLE_MAPS_KEY){window.open(`https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat.toFixed(6)},${lon.toFixed(6)}`,'_blank','noopener');return;}
@@ -743,10 +748,10 @@ function navTick(){
   else if(ahead){const t=REPORT_TYPES.find(x=>x.id===ahead.type);const nn=nearest(r.pts,[ahead.lat,ahead.lng]);const a2=r.cum[nn.i]+(r.cum[nn.i+1]-r.cum[nn.i])*nn.t;setState(`${t.label} relatada a ${fmtM(a2-along)}`,'warn',0,'report','',I.warn);
     const rk='rep:'+ahead.date;if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Atenção. ${t.label} relatada a ${fmtM(a2-along).replace(' m',' metros').replace(' km',' quilômetros')} à frente.`);}}
   else if((()=>{const dr=(S.xray&&S.xray.truck.dirtRanges||[]).find(g=>g.e>along&&g.b-along<800);if(!dr)return false;const inside=along>=dr.b;const len=fmtKm((dr.e-Math.max(along,dr.b))/1000);
-      setState(inside?`Estrada de chão por mais ${len}`:`Estrada de chão em ${fmtM(dr.b-along)}, por ${len}`,'warn',0,'dirt','',I.dirt);
+      setState(inside?`Estrada de chão por mais ${len}`:`Estrada de chão em ${fmtM(dr.b-along)}, por ${len}`,'warn',0,'dirt',`<button class="eyeb" id="seeDirtNav" aria-label="Ver a estrada de chão">${I.eye}</button>`,I.dirt);const bq=$('seeDirtNav');if(bq)bq.onclick=()=>seeDirt('dirt');
       const rk='dirt:'+Math.round(dr.b);if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Atenção, estrada de chão ${inside?'agora':'à frente'}, por ${len.replace(' km',' quilômetros').replace(' m',' metros')}. Não há outro caminho.`);}return true;})()){}
   else if((()=>{const rr=(S.xray&&S.xray.truck.roughRanges||[]).find(g=>g.e>along&&g.b-along<600);if(!rr)return false;const inside=along>=rr.b;const len=fmtKm((rr.e-Math.max(along,rr.b))/1000);
-      setState(inside?`Asfalto ruim por mais ${len}`:`Asfalto ruim em ${fmtM(rr.b-along)}, por ${len}`,'warn',0,'rough','',I.warn);
+      setState(inside?`Asfalto ruim por mais ${len}`:`Asfalto ruim em ${fmtM(rr.b-along)}, por ${len}`,'warn',0,'rough',`<button class="eyeb" id="seeRoughNav" aria-label="Ver o asfalto ruim">${I.eye}</button>`,I.warn);const bq=$('seeRoughNav');if(bq)bq.onclick=()=>seeDirt('rough');
       const rk='rough:'+Math.round(rr.b);if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Atenção, asfalto ruim ${inside?'agora':'à frente'}, por ${len.replace(' km',' quilômetros').replace(' m',' metros')}.`);}return true;})()){}
   else if(dist<300&&ms[mi+1]){setState('Depois, '+manText(ms[mi+1]).txt.toLowerCase(),'card-s',0,'next');}
   else if(['radar','report','dirt','rough','next'].includes(stateKind))clearState();

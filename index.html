@@ -496,7 +496,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.5';
+const APP_VERSION='2026-09-18.6';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -1087,9 +1087,13 @@ $('testVoice').onclick=()=>{pickVoice();speak('Em 800 metros, vire à direita na
 function unscroll(){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0;}
 document.addEventListener('focusin',()=>setTimeout(unscroll,0));document.addEventListener('focusout',()=>{unscroll();setTimeout(unscroll,60);});
 window.addEventListener('scroll',unscroll);document.body.addEventListener('scroll',unscroll);
-async function checkUpdate(){try{const r=await fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/APP_VERSION='([^']+)'/);if(m&&m[1]!==APP_VERSION){$('updNotice').classList.add('on');}}catch(e){}}
-$('updNotice').onclick=()=>{location.replace(location.pathname+'?v='+Date.now());};
-setTimeout(checkUpdate,4000);setInterval(checkUpdate,600000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate();});
+function forceUpdate(){try{sessionStorage.setItem('upd',APP_VERSION);}catch(e){}location.replace(location.pathname+'?v='+Date.now());}
+async function checkUpdate(){try{const r=await fetch(location.pathname+'?v='+Date.now(),{cache:'no-store'});const t=await r.text();const m=t.match(/APP_VERSION='([^']+)'/);if(m&&m[1]!==APP_VERSION){
+  let last=null;try{last=sessionStorage.getItem('upd');}catch(e){}
+  if(S.screen!=='nav'&&last!==APP_VERSION){forceUpdate();return;}
+  $('updNotice').classList.add('on');}}catch(e){}}
+$('updNotice').onclick=forceUpdate;
+setTimeout(checkUpdate,1500);setInterval(checkUpdate,600000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate();});
 document.addEventListener('pointerdown',e=>{const b=e.target.closest('button,.li,.srow');if(!b)return;b.classList.add('press');const off=()=>{setTimeout(()=>b.classList.remove('press'),120);b.removeEventListener('pointerup',off);b.removeEventListener('pointercancel',off);b.removeEventListener('pointerleave',off);};b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off);},{passive:true});
 /* ===== login provisório (cadeado no aparelho; contas reais vêm com o servidor) ===== */
 const LOGIN_HASHES=['0fdf2a070ad2ec8121a4366d73c6bdbcc8734d369c4abb6067359fcb6c0edb4b','9c1bdc1240461c01f13f670730a0642defae5c513efbb9f76df9a16fe9528691'];

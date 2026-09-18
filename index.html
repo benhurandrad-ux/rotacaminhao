@@ -150,6 +150,17 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
 .seal.neutral{background:var(--inner);color:var(--text)}
 .seal.acc{background:var(--accent-soft);color:var(--accent)}
 .seal.warn{background:var(--warn-soft);color:var(--on-warn-soft)}
+.seal.danger{background:var(--danger-soft);color:var(--on-danger-soft)}
+.seal.tap{cursor:pointer}
+.rules h3{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:18px 0 6px}
+.rules .it{display:flex;gap:12px;align-items:center;min-height:56px;padding:8px 0;border-bottom:1px solid var(--divider);font-size:15px}
+.rules .it b{display:block;font-size:16px}
+.rules .it small{color:var(--muted);font-size:13px}
+.rules .it .tx{flex:1;min-width:0}
+.rules .it.bad b{color:var(--danger)}.rules .it.wr b{color:var(--on-warn-soft)}
+.rules .it .eyeb{width:40px;height:40px;border-radius:50%;background:var(--inner);display:grid;place-items:center;flex:none;padding:0}
+.rules .it .eyeb svg{width:18px;height:18px;color:var(--accent)}
+.rules .note{font-size:13px;color:var(--muted);margin-top:16px;line-height:1.4}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chips .seal{margin:0;flex:none;height:40px}
@@ -361,6 +372,11 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
     <button class="btn sec" id="svOpenApp" style="margin-top:12px">Abrir no Google Maps</button>
     <button class="btn outline" id="svWrong" style="margin-top:12px;display:none">${''}É asfalto, mapa errado</button></div>
 </div>
+<div class="sheet" id="sh-rules" role="dialog" aria-label="Restrições">
+  <div class="handle"></div>
+  <div class="titlebar"><h2 id="rulesTitle">Restrições na rota</h2><button class="round xs inner" data-close aria-label="Fechar"></button></div>
+  <div class="body rules" id="rulesBody"></div>
+</div>
 <div class="sheet" id="sh-report" role="dialog" aria-label="Reportar">
   <div class="handle"></div>
   <div class="titlebar"><h2>O que tem aqui?</h2></div>
@@ -395,7 +411,7 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
   <div class="handle"></div>
   <div class="titlebar"><h2>Configurações</h2><button class="round xs inner" data-close aria-label="Fechar"></button></div>
   <div class="body">
-    <div class="group"><button class="srow" id="openTrips"><span>Minhas viagens</span><small id="tripsCount"></small></button></div>
+    <div class="group"><button class="srow" id="openTrips"><span>Minhas viagens</span><small id="tripsCount"></small></button><button class="srow" id="openCal"><span>Feriados com restrição (PRF)</span><small id="calNext"></small></button></div>
     <div class="group">
       <button class="srow" id="setTruck"><span>Meu caminhão</span><small id="setTruckName"></small></button>
       <div class="meas">
@@ -480,7 +496,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.4';
+const APP_VERSION='2026-09-18.5';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -597,6 +613,7 @@ const shDiff=new Sheet('sh-diff',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{d
 const shSteps=new Sheet('sh-steps',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');}});
 const shStreet=new Sheet('sh-street',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{$('svFrame').src='about:blank';svKind=null;if(S.screen==='preview')shPreview.open('expanded');}});
 const shReport=new Sheet('sh-report',{open:()=>416+SAB()},{light:true});
+const shRules=new Sheet('sh-rules',{open:()=>Math.round(VH()*0.82)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');else if(S.screen==='settings')shSettings.open();}});
 const shTrip=new Sheet('sh-trip',{open:()=>360+SAB()},{light:true});
 const shLeave=new Sheet('sh-leave',{open:()=>230+SAB()},{});
 const shArrived=new Sheet('sh-arrived',{open:()=>300+SAB()},{closable:false});
@@ -707,6 +724,67 @@ async function xray(shape,costing){
   }
   return {dirt,dirtAccess,urban,hwy,total,rough,dirtSegs,urbSegs,roughSegs,roughRanges,dirtRanges,limits};
 }
+/* ===== restrições: viadutos, horários urbanos e feriados PRF ===== */
+let GAB=null,RULES=null;
+fetch('gabaritos.json').then(r=>r.ok?r.json():null).then(j=>{GAB=j;if(S.route&&S.screen==='preview'){S.rules=checkRules(S.route);renderPreview();}}).catch(()=>{});
+fetch('restricoes.json').then(r=>r.ok?r.json():null).then(j=>{RULES=j;renderCalNext();if(S.route&&S.screen==='preview'){S.rules=checkRules(S.route);renderPreview();}}).catch(()=>{});
+const nowMs=()=>Date.now()+(window.__tOff||0);
+const fmtH=h=>`${h}h`;
+const fmtHt=v=>v.toFixed(1).replace('.',',')+' m';
+const DIAS=['dom','seg','ter','qua','qui','sex','sáb'];
+function inPoly(p,poly){let ins=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a[1]>p[1])!==(b[1]>p[1])&&p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0])ins=!ins;}return ins;}
+function ruleAt(city,d){const wd=d.getDay(),h=d.getHours()+d.getMinutes()/60;return (city.rules||[]).find(r=>r.d.includes(wd)&&h>=r.from&&h<r.to)||null;}
+function nextRule(city,d){for(let k=0;k<8;k++){const wd=(d.getDay()+k)%7;const rs=(city.rules||[]).filter(r=>r.d.includes(wd)).sort((a,b)=>a.from-b.from);for(const r of rs){if(k>0||d.getHours()+d.getMinutes()/60<r.from)return {r,k,wd};}}return null;}
+function truckBig(){const t=S.truck,L=RULES&&RULES.federal.limits;if(!t||!L)return false;return t.h>L.h||t.w>L.w||t.l>L.l||t.wt>L.wt;}
+function fedWindows(fromMs,toMs){if(!RULES)return [];const out=[];for(const w of RULES.federal.windows){const [y,m,d]=w[0].split('-').map(Number);const a=new Date(y,m-1,d,w[1]).getTime(),b=new Date(y,m-1,d,w[2]).getTime();if(b>fromMs&&a<toMs)out.push({date:w[0],from:w[1],to:w[2],name:w[3],ufs:w[4]||null,a,b});}return out;}
+function checkRules(tr){
+  const R={viaducts:[],lowest:null,cities:[],federal:[],bad:0,warn:0};if(!tr||!tr.pts)return R;
+  const pts=tr.pts,cum=tr.cum,total=cum[cum.length-1]||1,t0=nowMs(),th=(S.truck&&S.truck.h)||4.4;
+  if(GAB){let a=90,b=-90,c=180,d=-180;for(const p of pts){if(p[0]<a)a=p[0];if(p[0]>b)b=p[0];if(p[1]<c)c=p[1];if(p[1]>d)d=p[1];}
+    const cand=GAB.filter(g=>g[0]>a-.001&&g[0]<b+.001&&g[1]>c-.001&&g[1]<d+.001);const found=[];
+    for(const g of cand){const n=nearest(pts,[g[0],g[1]]);if(n.d>18)continue;const along=cum[n.i]+(cum[n.i+1]-cum[n.i])*n.t;found.push({along,h:g[2],name:g[3]||'',lat:g[0],lon:g[1],i:n.i});}
+    found.sort((x,y)=>x.along-y.along);
+    for(const f of found){const last=R.viaducts[R.viaducts.length-1];if(last&&(f.along-last.along<300||(f.along-last.along<2500&&f.h===last.h))){if(f.h<last.h&&f.h>0||last.h===0&&f.h>0)Object.assign(last,f);else if(!last.name&&f.name)last.name=f.name;continue;}R.viaducts.push(f);}
+    for(const v of R.viaducts){v.lvl=v.h===0?'wr':v.h<th?'bad':v.h<th+0.2?'wr':'';v.alongKm=v.along/1000;if(v.h>0&&(R.lowest==null||v.h<R.lowest.h))R.lowest=v;}
+  }
+  if(RULES){
+    for(const c of RULES.cidades){if(S.truck&&c.minWt&&S.truck.wt<=c.minWt)continue;let ei=-1,xi=-1;for(let i=0;i<pts.length;i+=1){if(inPoly(pts[i],c.poly)){if(ei<0)ei=i;xi=i;}}if(ei<0)continue;
+      const along=cum[ei],eta=new Date(t0+tr.min*60000*(along/total)),endsInside=xi>=pts.length-2,exitEta=new Date(t0+tr.min*60000*(cum[xi]/total));
+      const r=ruleAt(c,eta)||(endsInside?null:ruleAt(c,exitEta));const nx=nextRule(c,eta);
+      R.cities.push({c,along,alongKm:along/1000,eta,active:!!r,r,nx,endsInside,i:ei});}
+    if(truckBig()){const ends=t0+tr.min*60000;const hasBR=(tr.maneuvers||[]).some(m=>(m.street_names||[]).some(n=>/\bBR[- ]?\d{3}/.test(n)));for(const w of fedWindows(t0,ends)){R.federal.push({...w,hasBR,now:t0>=w.a&&t0<w.b});}}
+  }
+  R.bad=R.viaducts.filter(v=>v.lvl==='bad').length+R.cities.filter(x=>x.active).length+R.federal.length;
+  R.warn=R.viaducts.filter(v=>v.lvl==='wr').length;
+  return R;
+}
+function ruleSeals(){const R=S.rules;if(!R)return [];const out=[];
+  const vb=R.viaducts.find(v=>v.lvl==='bad'),vw=R.viaducts.find(v=>v.lvl==='wr');const th=(S.truck&&S.truck.h)||4.4;
+  if(vb)out.push(`<div class="seal danger tap" data-rules="1">${I.bridge}<span>Viaduto de ${fmtHt(vb.h)} · seu caminhão ${fmtHt(th)}</span><button class="eyeb" data-seev="${R.viaducts.indexOf(vb)}" aria-label="Ver o viaduto">${I.eye}</button></div>`);
+  else if(vw)out.push(`<div class="seal warn tap" data-rules="1">${I.bridge}<span>${vw.h?`Viaduto justo: ${fmtHt(vw.h)}`:'Viaduto baixo sem altura informada'}</span><button class="eyeb" data-seev="${R.viaducts.indexOf(vw)}" aria-label="Ver o viaduto">${I.eye}</button></div>`);
+  else if(R.lowest)out.push(`<div class="seal neutral tap" data-rules="1">${I.bridge}<span>Menor viaduto ${fmtHt(R.lowest.h)}, passa</span></div>`);
+  for(const x of R.cities){const h=`${String(x.eta.getHours()).padStart(2,'0')}:${String(x.eta.getMinutes()).padStart(2,'0')}`;
+    if(x.active)out.push(`<div class="seal danger tap" data-rules="1">${I.noTruck}<span>${esc(x.c.name)} às ${h}: proibido até ${fmtH(x.r.to)}</span></div>`);
+    else out.push(`<div class="seal neutral tap" data-rules="1">${I.noTruck}<span>${esc(x.c.name)} às ${h}: liberado${x.nx&&x.nx.k===0?' até '+fmtH(x.nx.r.from):''}</span></div>`);}
+  for(const f of R.federal)out.push(`<div class="seal danger tap" data-rules="1">${I.warn}<span>PRF: ${f.now?'proibido agora':'proibido'} ${fmtH(f.from)} às ${fmtH(f.to)} · ${esc(f.name)}</span></div>`);
+  const rank=x=>x.includes('seal danger')?0:x.includes('seal warn')?1:2;return out.sort((a,b)=>rank(a)-rank(b));
+}
+function bindRuleSeals(root){root.querySelectorAll('[data-rules]').forEach(el=>el.onclick=e=>{if(e.target.closest('[data-seev]'))return;openRules();});root.querySelectorAll('[data-seev]').forEach(b=>b.onclick=e=>{e.stopPropagation();seeViaduct(+b.dataset.seev);});}
+function seeViaduct(i){const v=S.rules&&S.rules.viaducts[i];if(!v||!S.route)return;const pts=S.route.pts;const a=pts[Math.max(0,v.i-2)],b=pts[Math.min(pts.length-1,v.i+2)];svKind='bridge';openStreet(v.lat,v.lon,bearing(a,b));}
+function openRules(){const R=S.rules;if(!R)return;const th=(S.truck&&S.truck.h)||4.4;let h='';
+  if(R.viaducts.length){h+=`<h3>Viadutos e passagens baixas</h3>`+R.viaducts.map((v,i)=>`<div class="it ${v.lvl}"><div class="tx"><b>${v.h?fmtHt(v.h):'Altura não informada'}${v.lvl==='bad'?' · não passa':v.lvl==='wr'?' · justo':''}</b><small>${v.name?esc(v.name)+' · ':''}km ${Math.round(v.alongKm)}</small></div><button class="eyeb" data-seev="${i}" aria-label="Ver">${I.eye}</button></div>`).join('')+`<div class="note">Seu caminhão: ${fmtHt(th)}. Alturas do OpenStreetMap, confira no olho antes de passar.</div>`;}
+  else h+=`<h3>Viadutos</h3><div class="note" style="margin-top:4px">Nenhum viaduto abaixo de 5 m cadastrado nesta rota.</div>`;
+  if(R.cities.length){h+=`<h3>Horário nas cidades</h3>`+R.cities.map(x=>{const eh=`${String(x.eta.getHours()).padStart(2,'0')}:${String(x.eta.getMinutes()).padStart(2,'0')}`;return `<div class="it ${x.active?'bad':''}"><div class="tx"><b>${esc(x.c.name)} · ${esc(x.c.zone)}</b><small>Chega às ${eh} ${DIAS[x.eta.getDay()]} · ${x.active?`proibido até ${fmtH(x.r.to)}`:'liberado'}</small><small style="display:block;margin-top:4px">${esc(x.c.who)}. ${esc(x.c.txt)}</small></div></div>`;}).join('')+`<div class="note">Áreas aproximadas. Se o destino é dentro da área e o horário é proibido, chegue depois do horário ou pare fora dela.</div>`;}
+  if(R.federal.length){h+=`<h3>Feriado · rodovias federais (PRF)</h3>`+R.federal.map(f=>`<div class="it bad"><div class="tx"><b>${esc(f.name)} · ${f.date.split('-').reverse().slice(0,2).join('/')} ${fmtH(f.from)} às ${fmtH(f.to)}</b><small>Proibido rodar em BR de pista simples. Multa e caminhão retido até o fim do horário.${f.ufs?' Vale em '+f.ufs.join(', ')+'.':''}</small></div></div>`).join('')+`<div class="note">Vale para veículo acima de 2,60 m de largura, 4,40 m de altura, 19,80 m de comprimento ou 58,5 t, e para bitrem, rodotrem e cegonha. Não vale no AC, AM, AP, PA e RR.</div>`;}
+  else if(truckBig())h+=`<h3>Feriado · PRF</h3><div class="note" style="margin-top:4px">Nenhuma restrição de feriado no horário desta viagem.</div>`;
+  $('rulesTitle').textContent='Restrições na rota';$('rulesBody').innerHTML=h;bindRuleSeals($('rulesBody'));if(S.screen==='preview')shPreview.close(true);shRules.open();}
+function renderCalNext(){if(!RULES)return;const t=nowMs();const nx=RULES.federal.windows.map(w=>{const [y,m,d]=w[0].split('-').map(Number);return {w,a:new Date(y,m-1,d,w[1]).getTime()};}).find(x=>x.a>t-6*3600000);const el=$('calNext');if(el)el.textContent=nx?`próximo ${nx.w[0].split('-').reverse().slice(0,2).join('/')}`:'';}
+function openCal(){if(!RULES)return;const t=nowMs();const rows=RULES.federal.windows.filter(w=>{const [y,m,d]=w[0].split('-').map(Number);return new Date(y,m-1,d,w[2]).getTime()>t;});
+  const byName=[];for(const w of rows){let g=byName.find(x=>x.name===w[3]);if(!g){g={name:w[3],ufs:w[4]||null,items:[]};byName.push(g);}g.items.push(w);}
+  $('rulesTitle').textContent='Feriados com restrição';$('rulesBody').innerHTML=`<div class="note" style="margin-top:8px">Rodovias federais de pista simples. Vale para veículo acima de 2,60 m de largura, 4,40 m de altura, 19,80 m de comprimento ou 58,5 t, e para bitrem, rodotrem e cegonha. Não vale no AC, AM, AP, PA e RR.${truckBig()?' <b>Seu caminhão entra na restrição.</b>':' Seu caminhão atual não entra na restrição.'}</div>`+
+    byName.map(g=>`<h3>${esc(g.name)}${g.ufs?' · '+g.ufs.join(', '):''}</h3>`+g.items.map(w=>{const [y,m,d]=w[0].split('-').map(Number);const dt=new Date(y,m-1,d);return `<div class="it"><div class="tx"><b>${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')} ${DIAS[dt.getDay()]}</b><small>${fmtH(w[1])} às ${fmtH(w[2])}</small></div></div>`;}).join('')).join('')+`<div class="note">Fonte: Portaria DIOP/PRF nº 26/2026.</div>`;
+  shSettings.close(true);shRules.open();}
+$('openCal').onclick=openCal;
 let radarDB=null;fetch('radares.json').then(r=>r.ok?r.json():null).then(j=>{radarDB=j;}).catch(()=>{});
 function radarsFromDB(rt){if(!radarDB)return [];const pts=rt.pts;let a=90,b=-90,c=180,d=-180;for(const p of pts){if(p[0]<a)a=p[0];if(p[0]>b)b=p[0];if(p[1]<c)c=p[1];if(p[1]>d)d=p[1];}
   const m=0.01,out=[];for(const r of radarDB){if(r[0]<a-m||r[0]>b+m||r[1]<c-m||r[1]>d+m)continue;const n=nearest(pts,[r[0],r[1]]);if(n.d>60)continue;out.push({lat:r[0],lon:r[1],max:r[2],along:rt.cum[n.i]+(rt.cum[n.i+1]-rt.cum[n.i])*n.t,id:r[0]+','+r[1]});}return out.sort((x,y)=>x.along-y.along);}
@@ -765,7 +843,7 @@ async function verifyDirt(x){
 /* ===== prévia ===== */
 let pvSeq=0;
 async function preview(){
-  const seq=++pvSeq;S.origin=S.originOverride||S.pos||DEFAULT_POS;S.route=null;S.car=null;S.xray=null;S.radars=null;S.unknown=null;
+  const seq=++pvSeq;S.origin=S.originOverride||S.pos||DEFAULT_POS;S.route=null;S.car=null;S.xray=null;S.radars=null;S.unknown=null;S.rules=null;
   S.screen='preview';layer('l-preview');closeAll();routeLayer.clearLayers();radarLayer.clearLayers();unknownLayer.clearLayers();dirtLayer.clearLayers();
   $('pvHead').innerHTML=`<div class="bar" style="margin:0 0 14px"><i></i></div><div class="sk" style="display:flex;justify-content:space-between;align-items:flex-end"><i style="width:160px;height:40px"></i><i style="width:140px;height:17px"></i></div><i class="sk" style="display:block;height:40px;border-radius:999px;margin-top:12px"></i><i class="sk" style="display:block;height:64px;border-radius:20px;margin:16px 0 12px"></i><div class="calc tag" style="text-align:center">Calculando rota de caminhão...</div>`;$('pvBody').innerHTML='';
   shPreview.snaps.collapsed=()=>254+SAB();shPreview.open('collapsed');
@@ -773,11 +851,11 @@ async function preview(){
   try{
     const [tr,car]=await Promise.all([route(S.origin,S.dest,'truck'),route(S.origin,S.dest,'auto').catch(()=>null)]);
     if(seq!==pvSeq)return;clearTimeout(slow);
-    S.route=tr;S.car=car;S.raw=null;S.radars=radarsFromDB(tr);drawRadars();drawRoute(tr,car,false);
+    S.route=tr;S.car=car;S.raw=null;S.radars=radarsFromDB(tr);S.rules=checkRules(tr);drawRadars();drawRoute(tr,car,false);
     shPreview.snaps.collapsed=()=>220+SAB();$('pvHead').style.opacity=0;$('pvBody').style.opacity=0;renderPreview();shPreview.open('expanded');requestAnimationFrame(()=>{$('pvHead').style.opacity=1;$('pvBody').style.opacity=1;});fitRoute();
     let av=null;try{av=await avoidDirt(tr,seq);}catch(e){console.warn('raio-x indisponível',e);}if(seq!==pvSeq)return;
     let xt=av?av.xray:null;
-    if(av&&av.route!==tr){tr=av.route;S.route=tr;S.raw=av.raw;S.radars=radarsFromDB(tr);drawRadars();drawRoute(tr,car,false);renderPreview();shPreview.open('expanded');fitRoute();}
+    if(av&&av.route!==tr){tr=av.route;S.route=tr;S.raw=av.raw;S.radars=radarsFromDB(tr);S.rules=checkRules(tr);drawRadars();drawRoute(tr,car,false);renderPreview();shPreview.open('expanded');fitRoute();}
     const re=()=>{renderPreview();if(shPreview.state)shPreview.open(shPreview.state);};
     fetchRadars(tr).then(rs=>{if(seq!==pvSeq)return;S.radars=rs;drawRadars();re();});
     fetchUnknownSurface(tr).then(u=>{if(seq!==pvSeq)return;S.unknown=u;drawUnknown();re();});
@@ -817,7 +895,7 @@ function renderPreview(){
   $('pvHead').innerHTML=`<div class="pv-head"><b>${fmtMin(r.min)}</b><span>${fmtKm(r.km)} · Chega ${fmtETA(r.min)}</span></div>
     <div class="seal ${seal.cls}">${I[seal.ic]}<span>${seal.txt}</span>${na?`<button class="eyeb" id="seeDirtSeal" aria-label="Ver a estrada de chão">${I.eye}</button>`:''}</div>
     <button class="btn go" id="goBtn" style="margin:16px 0 12px">${I.go}<span>Ir</span></button>`;
-  const chips=[];
+  const chips=ruleSeals();
   if(S.radars)chips.push(`<div class="seal neutral">${I.camera}<span>${S.radars.length?S.radars.length+(S.radars.length>1?' radares':' radar'):'Sem radar conhecido'}</span></div>`);
   if(unk)chips.push(`<div class="seal warn">${I.warn}<span>${fmtKm(S.unknown.km)} com piso não confirmado</span></div>`);
   if(S.xray&&S.xray.truck.rough>0.3)chips.push(`<div class="seal warn">${I.warn}<span>${fmtKm(S.xray.truck.rough)} de asfalto ruim</span><button class="eyeb" id="seeRough" aria-label="Ver o asfalto ruim">${I.eye}</button></div>`);
@@ -827,6 +905,7 @@ function renderPreview(){
     <div class="row3"><button class="btn sec" id="diffBtn" ${S.car?'':'disabled'}>${I.diff}Diferenças</button><button class="btn sec" id="stepsBtn">${I.list}Trajeto</button><button class="btn sec" id="svBtn">${I.eye}Ver rua</button></div>
     <button class="btn outline" id="markDirt">${I.dirt}Desviar de chão</button>
     ${unk?'<div class="tag" style="text-align:center">Confira na rua antes de sair.</div>':''}</div>`;
+  bindRuleSeals($('pvBody'));
   const sd=$('seeDirtSeal');if(sd)sd.onclick=e=>{e.stopPropagation();seeDirt('dirt');};
   const sr=$('seeRough');if(sr)sr.onclick=e=>{e.stopPropagation();seeDirt('rough');};
   $('goBtn').onclick=startNav;$('diffBtn').onclick=openDiff;$('stepsBtn').onclick=openSteps;$('svBtn').onclick=()=>startPick('street');$('markDirt').onclick=()=>startPick('dirt');
@@ -892,7 +971,9 @@ function startNav(){
   S.navi={sim:false,speed:0,started:Date.now(),evDirt:0,evUrban:0,from:(S.origin&&S.origin.name)||'Posição atual',to:S.dest?S.dest.name:'',km:S.route.km,min:S.route.min,startPos:S.pos?{lat:S.pos.lat,lon:S.pos.lon}:null,dest:S.dest,origin:S.origin};const w=bestWin();if(w){S.navi.evDirt=w.dirt||0;S.navi.evUrban=w.urban||0;}
   spoken=new Set();offCount=0;follow=true;keepAwake();
   S.screen='nav';layer('l-nav');closeAll();unknownLayer.clearLayers();drawRoute(S.route,S.car,false);smooth.lat=S.pos.lat;smooth.lon=S.pos.lon;posMarker.setLatLng([S.pos.lat,S.pos.lon]);navZoom=16;focusPos(true);navTick();
-  if(S.voice)speak(`Vamos lá. ${fmtKm(S.route.km).replace(' km',' quilômetros')} até ${S.dest.name}, só por asfalto.`);
+  const fed=S.rules&&S.rules.federal&&S.rules.federal[0];
+  if(S.voice)speak(`Vamos lá. ${fmtKm(S.route.km).replace(' km',' quilômetros')} até ${S.dest.name}, só por asfalto.`+(fed?` Atenção: ${fed.name}, caminhão grande proibido em rodovia federal de pista simples das ${fed.from} às ${fed.to} horas.`:''));
+  if(fed)setTimeout(()=>setState(`PRF: proibido ${fmtH(fed.from)} às ${fmtH(fed.to)} em BR de pista simples`,'danger',15000,'info','',I.warn),1500);
   navTimer=setInterval(()=>{if(S.navi&&!S.navi.sim&&lastFix&&Date.now()-lastFix>20000)setState('Procurando GPS...','card-s',0,'gps');},5000);
   window.addEventListener('online',onlineBack);window.addEventListener('offline',offlineNow);
 }
@@ -902,7 +983,7 @@ function saveTrip(done){const n=S.navi;if(!n||n.sim&&!done)return;const t={date:
   S.trips=[t,...S.trips].slice(0,50);store.set('trips',S.trips);}
 function stopNav(){try{wake&&wake.release();wake=null;}catch(e){}clearInterval(navTimer);clearInterval(simTimer);simTimer=null;S.navi=null;try{speechSynthesis.cancel();}catch(e){}
   routeLayer.clearLayers();radarLayer.clearLayers();$('speed').classList.remove('on');clearState();window.removeEventListener('online',onlineBack);window.removeEventListener('offline',offlineNow);}
-const PRI={recalc:6,gps:5,net:4,sent:3,radar:2,report:1,dirt:1,rough:1,next:0,info:0};
+const PRI={recalc:6,gps:5,net:4,sent:3,bridge:3,zone:2,radar:2,report:1,dirt:1,rough:1,next:0,info:0};
 function setState(txt,cls,ms,kind='info',extra='',ic=''){
   if(stateKind&&PRI[stateKind]>PRI[kind])return;
   const b=$('stateBar');b.className='state on '+cls;b.innerHTML=`${ic}<span>${txt}</span>${extra}`;stateKind=kind;clearTimeout(stateT);if(ms)stateT=setTimeout(clearState,ms);
@@ -919,7 +1000,13 @@ function navTick(){
   $('navCard').innerHTML=`<div class="man-ic">${arrow(manIcon(m.type))}</div><div class="man-tx"><div class="d">${fmtM(dist)}</div><div class="i">${txt}</div>${road?`<div class="r">${esc(road)}</div>`:''}</div>`;
   const rd=(S.radars||[]).find(x=>x.along>along-20&&x.along-along<700);
   const ahead=S.reports.find(rep=>{const nn=nearest(r.pts,[rep.lat,rep.lng]);if(nn.d>150)return false;const a2=r.cum[nn.i]+(r.cum[nn.i+1]-r.cum[nn.i])*nn.t;return a2>along&&a2-along<2000;});
-  if(rd){setState(`Radar a ${fmtM(rd.along-along)}${rd.max?` · ${rd.max} km/h`:''}`,'danger',0,'radar','',I.camera);const rk='rad:'+rd.id;if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Radar a ${fmtM(rd.along-along).replace(' m',' metros')}${rd.max?`, limite ${rd.max}`:''}.`);}}
+  const vb=(S.rules&&S.rules.viaducts||[]).find(v=>v.lvl&&v.along>along-30&&v.along-along<1500);
+  const zn=(S.rules&&S.rules.cities||[]).find(x=>x.active&&x.along>along-50&&x.along-along<20000);
+  if(vb){const th=(S.truck&&S.truck.h)||4.4;setState(`${vb.lvl==='bad'?'Viaduto baixo':'Viaduto justo'} a ${fmtM(vb.along-along)}${vb.h?` · ${fmtHt(vb.h)}`:''}`,vb.lvl==='bad'?'danger':'warn',0,'bridge',`<button class="eyeb" id="seeVNav" aria-label="Ver o viaduto">${I.eye}</button>`,I.bridge);const bq=$('seeVNav');if(bq)bq.onclick=()=>seeViaduct(S.rules.viaducts.indexOf(vb));
+    const rk='via:'+Math.round(vb.along);if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(vb.lvl==='bad'?`Atenção! Viaduto de ${fmtHt(vb.h).replace(' m',' metros')} em ${fmtM(vb.along-along).replace(' m',' metros').replace(' km',' quilômetros')}. Seu caminhão tem ${fmtHt(th).replace(' m',' metros')}. Não passa.`:`Atenção, viaduto ${vb.h?'de '+fmtHt(vb.h).replace(' m',' metros'):'baixo'} à frente, altura justa.`);}}
+  else if(zn){setState(`${zn.c.name}: caminhão proibido até ${fmtH(zn.r.to)} · ${fmtM(zn.along-along)}`,'danger',0,'zone','',I.noTruck);
+    const rk='zone:'+zn.c.id;if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Atenção. Em ${fmtM(zn.along-along).replace(' m',' metros').replace(' km',' quilômetros')} você entra em ${zn.c.name}, área proibida para caminhão até as ${zn.r.to} horas.`);}}
+  else if(rd){setState(`Radar a ${fmtM(rd.along-along)}${rd.max?` · ${rd.max} km/h`:''}`,'danger',0,'radar','',I.camera);const rk='rad:'+rd.id;if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Radar a ${fmtM(rd.along-along).replace(' m',' metros')}${rd.max?`, limite ${rd.max}`:''}.`);}}
   else if(ahead){const t=REPORT_TYPES.find(x=>x.id===ahead.type);const nn=nearest(r.pts,[ahead.lat,ahead.lng]);const a2=r.cum[nn.i]+(r.cum[nn.i+1]-r.cum[nn.i])*nn.t;setState(`${t.label} relatada a ${fmtM(a2-along)}`,'warn',0,'report','',I.warn);
     const rk='rep:'+ahead.date;if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Atenção. ${t.label} relatada a ${fmtM(a2-along).replace(' m',' metros').replace(' km',' quilômetros')} à frente.`);}}
   else if((()=>{const dr=(S.xray&&S.xray.truck.dirtRanges||[]).find(g=>g.e>along&&g.b-along<800);if(!dr)return false;const inside=along>=dr.b;const len=fmtKm((dr.e-Math.max(along,dr.b))/1000);
@@ -929,7 +1016,7 @@ function navTick(){
       setState(inside?`Asfalto ruim por mais ${len}`:`Asfalto ruim em ${fmtM(rr.b-along)}, por ${len}`,'warn',0,'rough',`<button class="eyeb" id="seeRoughNav" aria-label="Ver o asfalto ruim">${I.eye}</button>`,I.warn);const bq=$('seeRoughNav');if(bq)bq.onclick=()=>seeDirt('rough');
       const rk='rough:'+Math.round(rr.b);if(S.voice&&!spoken.has(rk)){spoken.add(rk);speak(`Atenção, asfalto ruim ${inside?'agora':'à frente'}, por ${len.replace(' km',' quilômetros').replace(' m',' metros')}.`);}return true;})()){}
   else if(dist<300&&ms[mi+1]){setState('Depois, '+manText(ms[mi+1]).txt.toLowerCase(),'card-s',0,'next');}
-  else if(['radar','report','dirt','rough','next'].includes(stateKind))clearState();
+  else if(['bridge','zone','radar','report','dirt','rough','next'].includes(stateKind))clearState();
   const lim=(S.xray&&S.xray.truck.limits||[]).find(l=>n.i>=l.b&&n.i<l.e);curLimit=lim?lim.v:null;const sp=$('speed');sp.textContent=lim?lim.v:'';sp.classList.toggle('on',!!lim);sp.classList.toggle('over',!!lim&&(S.pos.speed||0)>=lim.v+5);showSpeed();
   if(S.voice){const key=mi+':'+(dist<250?'b':dist<1200?'a':'');if(dist<1200&&!spoken.has(key)){spoken.add(key);speak((dist<250?'':`Em ${fmtM(dist).replace(' m',' metros').replace(' km',' quilômetros')}, `)+txt.toLowerCase()+(road?` na ${road}`:''));}}
   const total=r.cum[r.cum.length-1]||1;const minLeft=r.min*(remaining/total);
@@ -941,7 +1028,7 @@ if(window.speechSynthesis){pickVoice();speechSynthesis.onvoiceschanged=pickVoice
 function speak(t){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='pt-BR';if(ptVoice)u.voice=ptVoice;u.rate=1.02;speechSynthesis.speak(u);}catch(e){}}
 async function recalc(){
   S.navi.recalc=true;setState('Recalculando...','acc',0,'recalc');if(S.voice)speak('Recalculando a rota.');
-  try{const tr=await route(S.pos,S.dest,'truck');S.route=tr;S.origin={...S.pos};drawRoute(tr,null,false);spoken=new Set();offCount=0;fetchRadars(tr).then(rs=>{S.radars=rs;drawRadars();});xray(tr.shape,'truck').then(x=>{S.xray=S.xray||{};S.xray.truck=x;}).catch(()=>{});}
+  try{const tr=await route(S.pos,S.dest,'truck');S.route=tr;S.origin={...S.pos};S.rules=checkRules(tr);drawRoute(tr,null,false);spoken=new Set();offCount=0;fetchRadars(tr).then(rs=>{S.radars=rs;drawRadars();});xray(tr.shape,'truck').then(x=>{S.xray=S.xray||{};S.xray.truck=x;}).catch(()=>{});}
   catch(e){}
   S.navi.recalc=false;clearState();navTick();
 }

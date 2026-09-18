@@ -480,7 +480,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-18.1';
+const APP_VERSION='2026-09-18.2';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -620,31 +620,49 @@ $('chip').onclick=openSettings;
 $('whereBtn').onclick=()=>{S.originOverride=null;openSearch('dest');};
 
 /* ===== busca ===== */
+let CITIES=null;fetch('cidades.json').then(r=>r.ok?r.json():null).then(j=>{CITIES=(j||[]).map(c=>({name:c[0],uf:c[1],lat:c[2],lon:c[3],kind:c[4],cap:c[5]||'',key:norm(c[0])}));}).catch(()=>{});
+function norm(t){return (t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();}
+function lev(a,b){if(Math.abs(a.length-b.length)>2)return 9;const m=a.length,n=b.length;let prev=[...Array(n+1).keys()],cur=new Array(n+1);for(let i=1;i<=m;i++){cur[0]=i;for(let j=1;j<=n;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));}[prev,cur]=[cur,prev];}return prev[n];}
+function localSearch(q){
+  if(!CITIES)return {hits:[],suggest:null};const nq=norm(q);if(nq.length<2)return {hits:[],suggest:null};
+  const parts=nq.split(' ');const ufQ=parts.length>1&&parts[parts.length-1].length===2?parts[parts.length-1].toUpperCase():null;const base=ufQ?parts.slice(0,-1).join(' '):nq;
+  const here=S.pos||DEFAULT_POS;const dist=c=>Math.hypot(c.lat-here.lat,(c.lon-here.lon)*Math.cos(rad(here.lat)));
+  let exact=CITIES.filter(c=>(c.key===base||c.key.startsWith(base)||c.key.split(' ').some(w=>w.startsWith(base)))&&(!ufQ||c.uf===ufQ));
+  exact.sort((a,b)=>(a.key===base?-1:b.key===base?1:0)||(b.kind===1)-(a.kind===1)||dist(a)-dist(b));
+  let suggest=null;
+  if(!exact.length&&base.length>=4){let best=null,bd=3;for(const c of CITIES){const d=lev(base,c.key);if(d<bd||(d===bd&&best&&dist(c)<dist(best))){bd=d;best=c;}}if(best&&bd<=2)suggest=best;}
+  return {hits:exact.slice(0,6),suggest};
+}
 let searchMode='dest',qTimer=null,searchSeq=0;
 function openSearch(mode){searchMode=mode;S.screen='search';layer('l-home');$('q').value='';$('qClear').classList.remove('on');$('q').placeholder=mode==='dest'?'Cidade, endereço ou rodovia':'Sair de onde?';renderResults([]);shSearch.open();$('q').focus({preventScroll:true});}
 $('searchBack').onclick=()=>shSearch.close();
 $('qClear').onclick=()=>{$('q').value='';$('qClear').classList.remove('on');renderResults([]);$('q').focus({preventScroll:true});};
-$('q').addEventListener('input',()=>{clearTimeout(qTimer);const v=$('q').value.trim();$('qClear').classList.toggle('on',v.length>0);if(v.length<3){renderResults([]);return;}qTimer=setTimeout(()=>doSearch(v),450);});
+$('q').addEventListener('input',()=>{clearTimeout(qTimer);const v=$('q').value.trim();$('qClear').classList.toggle('on',v.length>0);if(v.length<2){renderResults([]);return;}const loc=localSearch(v);renderResults(loc.hits.map(cityRow),true,loc.suggest,true);if(v.length<3)return;qTimer=setTimeout(()=>doSearch(v),450);});
 let lastSearched='';
 $('q').addEventListener('keydown',e=>{if(e.key==='Enter'){clearTimeout(qTimer);const first=$('results').querySelector('.li');if(first&&lastSearched===$('q').value.trim())first.click();else doSearch($('q').value.trim());}});
 async function doSearch(v){
   const seq=++searchSeq;const c=S.pos||DEFAULT_POS;
   try{const r=await fetch(`${NOMINATIM}?format=json&limit=8&countrycodes=br&accept-language=pt-BR&addressdetails=1&viewbox=${c.lon-6},${c.lat+6},${c.lon+6},${c.lat-6}&q=${encodeURIComponent(v)}`);
     const j=await r.json();if(seq!==searchSeq)return;
-    lastSearched=v;renderResults(j.map(x=>({lat:+x.lat,lon:+x.lon,name:x.name||x.display_name.split(',')[0],sub:subFrom(x)})),true);
-  }catch(e){if(seq===searchSeq)$('results').innerHTML='<div class="empty">Sem sinal. Tente de novo.</div>';}
+    lastSearched=v;const loc=localSearch(v);const seen=new Set(loc.hits.map(c=>c.key+c.uf));
+    const remote=j.map(x=>({lat:+x.lat,lon:+x.lon,name:x.name||x.display_name.split(',')[0],sub:subFrom(x)})).filter(r=>!seen.has(norm(r.name)+(r.sub||'').slice(-2)));
+    renderResults(loc.hits.map(cityRow).concat(remote),true,loc.suggest);
+  }catch(e){if(seq===searchSeq){const loc=localSearch(v);if(loc.hits.length)renderResults(loc.hits.map(cityRow),true,loc.suggest);else $('results').innerHTML='<div class="empty">Sem sinal. Tente de novo.</div>';}}
 }
 function subFrom(x){const a=x.address||{};const city=a.city||a.town||a.village||a.municipality||'';const st=a.state||'';const parts=[];if(city&&city!==x.name)parts.push(city);if(st)parts.push(st);return parts.join(', ')||x.display_name.split(',').slice(1,3).join(',');}
 const rowHtml=(r,ic)=>`<button class="li" data-p='${JSON.stringify({lat:r.lat,lon:r.lon,name:r.name,sub:r.sub}).replace(/'/g,'&#39;')}'><span class="ic">${I[ic]}</span><span class="tx"><b>${esc(r.name)}</b><span>${esc(r.sub||'')}</span></span></button>`;
-function renderResults(list,searched){
+function cityRow(c){return c.kind===2?{lat:c.lat,lon:c.lon,name:c.name,sub:`Estado · vai para ${c.cap}`}:{lat:c.lat,lon:c.lon,name:c.name,sub:(c.kind===1?'Capital · ':'')+c.uf};}
+function renderResults(list,searched,suggest,partial){
   let html='';
+  if(suggest&&!list.length)html+=`<button class="link-row" id="suggestBtn">Você quis dizer <b>${esc(suggest.name)}</b>${suggest.kind===2?'':' · '+suggest.uf}?</button>`;
   if(!searched&&S.recents.length)html+='<div class="sec-h">Recentes</div>'+S.recents.slice(0,3).map(r=>rowHtml(r,'clock')).join('');
-  if(searched&&!list.length)html+='<div class="empty">Não achei esse lugar. Tente com a cidade e o estado.</div>';
+  if(searched&&!list.length&&!suggest&&!partial)html+='<div class="empty">Não achei esse lugar. Tente com a cidade e o estado.</div>';
   html+=list.map(r=>rowHtml(r,'pin')).join('');
   if(searchMode==='dest'&&!searched)html+='<button class="link-row" id="fromElse">Sair de outro lugar</button>';
   $('results').innerHTML=html;
   $('results').querySelectorAll('.li').forEach(b=>b.onclick=()=>pick_(JSON.parse(b.dataset.p)));
   const fe=$('fromElse');if(fe)fe.onclick=()=>openSearch('origin');
+  const sb=$('suggestBtn');if(sb&&suggest)sb.onclick=()=>{$('q').value=suggest.name;$('q').dispatchEvent(new Event('input'));};
 }
 function pick_(p){
   if(searchMode==='origin'){S.originOverride=p;openSearch('dest');notice(`Saindo de ${p.name}`,3000);return;}

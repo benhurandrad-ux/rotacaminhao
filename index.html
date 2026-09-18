@@ -220,6 +220,24 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
 .tile.cancel{background:transparent;border:1.5px solid var(--divider)}
 .tile.cancel svg{color:var(--muted)}
 
+/* login provisório */
+.login{position:absolute;inset:0;z-index:60;background:#0B1220;display:none;flex-direction:column;justify-content:center;padding:calc(var(--sat) + 24px) 20px calc(var(--sab) + 24px);color:#F2F5FB}
+.login.on{display:flex}
+.login .brand{display:flex;flex-direction:column;align-items:center;gap:12px;margin-bottom:28px}
+.login .brand .lg{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#4D8BFF,#1349B8);display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.login .brand .lg svg{width:40px;height:30px;color:#fff}
+.login h1{font-size:26px;font-weight:700;margin:0}
+.login p{margin:0;color:#A9B4C6;font-size:15px;font-weight:500;text-align:center}
+.login .box{background:rgba(19,26,40,.92);border:1px solid rgba(255,255,255,.08);border-radius:24px;padding:20px 16px;display:flex;flex-direction:column;gap:12px}
+.login label{font-size:13px;font-weight:600;color:#A9B4C6;display:block;margin:0 0 6px 4px}
+.login .fld{position:relative}
+.login input{width:100%;height:56px;border-radius:18px;border:0;background:rgba(255,255,255,.08);color:#F2F5FB;font:inherit;font-size:18px;font-weight:500;padding:0 52px 0 16px;outline:none;-webkit-appearance:none}
+.login input:focus{box-shadow:0 0 0 2px #4D8BFF}
+.login .eyeT{position:absolute;right:6px;top:6px;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;color:#A9B4C6}
+.login .eyeT svg{width:22px;height:22px}
+.login .err{min-height:20px;font-size:14px;font-weight:600;color:#FCA5A5;text-align:center}
+.login .btn.accent{background:#1F6BFF;color:#fff}
+.login .foot{margin-top:20px;text-align:center;font-size:13px;color:#5B6779;font-weight:500}
 /* primeiro uso */
 .ob{position:absolute;inset:0;z-index:25;background:var(--scrim);display:none;flex-direction:column;padding:calc(var(--sat) + 16px) 16px calc(var(--sab) + 16px);gap:12px;overflow:auto}
 .ob.on{display:flex}
@@ -258,6 +276,17 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
 <body>
 <div id="map" aria-hidden="true"></div>
 
+<!-- Login provisório -->
+<div class="login" id="login" role="dialog" aria-label="Entrar">
+  <div class="brand"><div class="lg" id="loginLogo"></div><h1>Rota Caminhão</h1><p>Rota de caminhão sem estrada de chão</p></div>
+  <form class="box" id="loginForm" autocomplete="on">
+    <div><label for="lu">Usuário</label><div class="fld"><input id="lu" name="username" type="text" autocapitalize="none" autocorrect="off" autocomplete="username" enterkeyhint="next" placeholder="seu usuário"></div></div>
+    <div><label for="lp">Senha</label><div class="fld"><input id="lp" name="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="sua senha"><button type="button" class="eyeT" id="lpEye" aria-label="Mostrar senha"></button></div></div>
+    <div class="err" id="loginErr"></div>
+    <button type="submit" class="btn accent" id="loginBtn">Entrar</button>
+  </form>
+  <div class="foot">Acesso restrito ao beta. Versão provisória.</div>
+</div>
 <!-- Primeiro uso -->
 <div class="ob" id="ob">
   <div class="card" style="padding:4px"><h1>Qual é o seu caminhão?</h1></div>
@@ -384,6 +413,7 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
       <button class="srow" id="rowVoice"><span>Som das instruções</span><span class="sw" id="swVoice" role="switch" aria-label="Som das instruções"></span></button>
       <button class="srow" id="testVoice"><span>Voz</span><small id="voiceName"></small></button>
     </div>
+    <div class="group"><button class="srow" id="logoutBtn"><span>Sair da conta</span><small id="sessUser"></small></button></div>
     <div class="group"><div class="srow"><small>Rota Caminhão · protótipo · R$ 60 por mês</small></div><div class="srow"><small>Mapa © OpenStreetMap · Street View © Google</small></div></div>
   </div>
 </div>
@@ -450,7 +480,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-17.8';
+const APP_VERSION='2026-09-18.1';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -922,6 +952,7 @@ function openTrips(){
 $('openTrips').onclick=()=>{shSettings.close(true);openTrips();};
 function renderSettings(){renderChip();const t=S.truck||TRUCKS[3];$('m_h').value=t.h;$('m_w').value=t.w;$('m_l').value=t.l;$('m_wt').value=t.wt;$('m_ax').value=t.ax;
   $('swToll').classList.toggle('on',S.toll);$('swVoice').classList.toggle('on',S.voice);$('segTheme').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.v===S.theme));
+  $('logoutBtn').onclick=logout;const ss=store.get('session',null);$('sessUser').textContent=ss?ss.user:'';
   $('tripsCount').textContent=S.trips.length?S.trips.length+(S.trips.length>1?' viagens':' viagem'):'';
   pickVoice();$('voiceName').innerHTML=`${I.sound}${ptVoice?esc(ptVoice.name):(window.speechSynthesis?'Padrão do celular':'Sem voz')}`;}
 $('setTruck').onclick=()=>{shSettings.close(true);renderTruckGrid();$('ob').classList.add('on');};
@@ -938,11 +969,23 @@ async function checkUpdate(){try{const r=await fetch(location.pathname+'?v='+Dat
 $('updNotice').onclick=()=>location.reload(true);
 setTimeout(checkUpdate,4000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkUpdate();});
 document.addEventListener('pointerdown',e=>{const b=e.target.closest('button,.li,.srow');if(!b)return;b.classList.add('press');const off=()=>{setTimeout(()=>b.classList.remove('press'),120);b.removeEventListener('pointerup',off);b.removeEventListener('pointercancel',off);b.removeEventListener('pointerleave',off);};b.addEventListener('pointerup',off);b.addEventListener('pointercancel',off);b.addEventListener('pointerleave',off);},{passive:true});
+/* ===== login provisório (cadeado no aparelho; contas reais vêm com o servidor) ===== */
+const LOGIN_HASHES=['0fdf2a070ad2ec8121a4366d73c6bdbcc8734d369c4abb6067359fcb6c0edb4b','9c1bdc1240461c01f13f670730a0642defae5c513efbb9f76df9a16fe9528691'];
+async function sha256(t){const b=new TextEncoder().encode(t);const h=await crypto.subtle.digest('SHA-256',b);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('');}
+function loggedIn(){const s=store.get('session',null);return !!(s&&s.exp>Date.now());}
+$('loginLogo').innerHTML=I.truck;$('lpEye').innerHTML=I.eye;
+$('lpEye').onclick=()=>{const i=$('lp');i.type=i.type==='password'?'text':'password';};
+$('loginForm').onsubmit=async e=>{e.preventDefault();const u=$('lu').value.trim().toLowerCase(),pw=$('lp').value;$('loginErr').textContent='';$('loginBtn').disabled=true;
+  let ok=false;try{const h=await sha256(u+':'+pw);ok=LOGIN_HASHES.includes(h);}catch(err){ok=false;}
+  $('loginBtn').disabled=false;
+  if(!ok){$('loginErr').textContent='Usuário ou senha errados.';$('lp').value='';$('lp').focus({preventScroll:true});return;}
+  store.set('session',{user:u,exp:Date.now()+30*24*3600*1000});$('login').classList.remove('on');boot();};
+function logout(){store.set('session',null);location.reload();}
+function boot(){if(S.truck){renderChip();showHome();}else{renderTruckGrid();$('ob').classList.add('on');S.screen='onboard';}startGPS();}
 /* ===== início ===== */
 drawReports();
 window.addEventListener('resize',()=>{setTimeout(()=>map.invalidateSize(),100);Object.values(SHEETS).forEach(s=>{if(s.state)s.open(s.state);});});
-if(S.truck){renderChip();showHome();}else{renderTruckGrid();$('ob').classList.add('on');S.screen='onboard';}
-startGPS();
+if(loggedIn())boot();else{$('login').classList.add('on');setTimeout(()=>$('lu').focus({preventScroll:true}),300);}
 </script>
 </body>
 </html>

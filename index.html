@@ -70,6 +70,18 @@ html[data-theme="night"] .leaflet-tile-pane{filter:invert(1) hue-rotate(195deg) 
 .chip svg{width:22px;height:22px;color:var(--muted)}
 .search-pill{position:absolute;left:16px;right:16px;bottom:calc(var(--sab) + 16px);height:64px;display:flex;align-items:center;gap:14px;padding:0 22px;font-size:20px;font-weight:500;color:var(--muted);text-align:left;border-radius:999px}
 .search-pill svg{width:24px;height:24px;color:var(--accent)}
+.plan-btn{position:absolute;left:16px;bottom:calc(var(--sab) + 92px);height:52px;padding:0 18px 0 14px;display:flex;align-items:center;gap:8px;font-size:16px;font-weight:600;border-radius:999px}
+.plan-btn svg{width:22px;height:22px;color:var(--accent)}
+.dest.tapme{cursor:pointer}
+.dest .ab.a{border-color:var(--ok,#18A34A)}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:8px}
+.stats div{background:var(--inner);border-radius:16px;padding:12px 10px;text-align:center}
+.stats b{display:block;font-size:19px;font-weight:700;line-height:1.1;white-space:nowrap}
+.stats small{font-size:12px;color:var(--muted);font-weight:600}
+.kv{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;border-bottom:1px solid var(--divider);font-size:16px}
+.kv b{font-weight:700;white-space:nowrap}.kv.bad b{color:var(--danger)}.kv.wr b{color:var(--on-warn-soft)}.kv small{color:var(--muted);font-weight:500}
+.mix{display:flex;height:10px;border-radius:5px;overflow:hidden;background:var(--inner);margin:10px 0 4px}
+.mix i{display:block;height:100%}
 .center-btn{position:absolute;right:16px;bottom:calc(var(--sab) + 92px);opacity:0;visibility:hidden;transition:opacity .15s,visibility 0s .15s}
 .center-btn.on{opacity:1;visibility:visible;transition:opacity .15s,visibility 0s}
 .spd{position:absolute;right:16px;top:calc(var(--sat) + 12px);height:48px;padding:0 16px;display:flex;align-items:baseline;gap:4px;font-weight:700;font-size:22px;line-height:1}
@@ -331,6 +343,7 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
   <div class="card pill spd" id="spdHome" aria-label="Velocidade atual"><span id="spdHomeV">0</span><small>km/h</small></div>
   <div class="notice" id="notice"><span id="noticeTx"></span><button id="noticeX" aria-label="Fechar"></button></div>
   <button class="card round center-btn" id="centerBtn" aria-label="Centralizar"></button>
+  <button class="card plan-btn" id="planBtn" aria-label="Montar rota"><span id="icPlan"></span><span>Montar rota</span></button>
   <button class="card search-pill" id="whereBtn"><span id="icSearch"></span><span>Pra onde?</span></button>
 </div>
 
@@ -391,6 +404,11 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
   <div class="body"><div class="svbox"><iframe id="svFrame" title="Street View" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe></div>
     <button class="btn sec" id="svOpenApp" style="margin-top:12px">Abrir no Google Maps</button>
     <button class="btn outline" id="svWrong" style="margin-top:12px;display:none">${''}É asfalto, mapa errado</button></div>
+</div>
+<div class="sheet" id="sh-plan" role="dialog" aria-label="Montar rota">
+  <div class="handle"></div>
+  <div class="titlebar"><h2>Montar rota</h2><button class="round xs inner" data-close aria-label="Fechar"></button></div>
+  <div class="body stack" id="planBody"></div>
 </div>
 <div class="sheet" id="sh-rules" role="dialog" aria-label="Restrições">
   <div class="handle"></div>
@@ -459,6 +477,8 @@ html[data-theme="night"] .scrim.light{background:rgba(0,0,0,.32)}
 <script>
 /* ===== ícones (traço bold) ===== */
 const I={
+  route:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.5"/><circle cx="18" cy="5" r="2.5"/><path d="M8.5 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.5"/></svg>',
+  info:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7.5v.01"/></svg>',
   plus:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   up:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m6 11 6-6 6 6"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
@@ -520,7 +540,7 @@ function manText(m){
 }
 
 /* ===== dados e estado ===== */
-const APP_VERSION='2026-09-19.1';
+const APP_VERSION='2026-09-19.2';
 const GOOGLE_MAPS_KEY='AIzaSyABcDqbmkcVSuNCYW2__7xqiEdKmmt362E'; // chave pública da Maps Embed API, restrita ao domínio rota.benhurandrade.com.br
 const VALHALLA='https://valhalla1.openstreetmap.de';
 const NOMINATIM='https://nominatim.openstreetmap.org/search';
@@ -631,7 +651,7 @@ const VH=()=>window.innerHeight;
 const px=v=>parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v))||0;
 const SAB=()=>px('--sab'),SAT=()=>px('--sat');
 const VV=()=>(window.visualViewport&&window.visualViewport.height)||VH();
-const shSearch=new Sheet('sh-search',{open:()=>VV()-SAT()-61},{onClose:()=>{if(S.screen!=='search')return;if(searchMode==='stop'&&S.route){S.screen='preview';layer('l-preview');drawRoute(S.route,S.car,false);shPreview.open('expanded');}else showHome();}});
+const shSearch=new Sheet('sh-search',{open:()=>VV()-SAT()-61},{onClose:()=>{if(S.screen!=='search')return;if(searchMode.startsWith('plan')){openPlan();return;}if(searchMode==='stop'&&S.route){S.screen='preview';layer('l-preview');drawRoute(S.route,S.car,false);shPreview.open('expanded');}else showHome();}});
 function setVVH(){const vv=window.visualViewport;const h=vv?Math.round(vv.height):VH();document.documentElement.style.setProperty('--vvh',h+'px');if(vv)shSearch.el.style.top=Math.round(vv.offsetTop)+'px';if(vv&&vv.offsetTop>0&&S.screen==='search')unscroll();}
 setVVH();if(window.visualViewport){window.visualViewport.addEventListener('resize',setVVH);window.visualViewport.addEventListener('scroll',setVVH);}window.addEventListener('resize',setVVH);
 const shPreview=new Sheet('sh-preview',{collapsed:()=>220+SAB(),expanded:()=>Math.min(24+$('pvHead').offsetHeight+$('pvBody').scrollHeight+4,VH()-SAT()-120)},{scrim:false,closable:false});
@@ -639,6 +659,7 @@ const shDiff=new Sheet('sh-diff',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{d
 const shSteps=new Sheet('sh-steps',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');}});
 const shStreet=new Sheet('sh-street',{open:()=>Math.round(VH()*0.8)},{onClose:()=>{$('svFrame').src='about:blank';svKind=null;if(S.screen==='preview')shPreview.open('expanded');}});
 const shReport=new Sheet('sh-report',{open:()=>416+SAB()},{light:true});
+const shPlan=new Sheet('sh-plan',{open:()=>Math.round(VH()*0.86)},{onClose:()=>{if(S.screen==='plan'){if(S.route){S.screen='preview';layer('l-preview');shPreview.open('expanded');}else showHome();}}});
 const shRules=new Sheet('sh-rules',{open:()=>Math.round(VH()*0.82)},{onClose:()=>{if(S.screen==='preview')shPreview.open('expanded');else if(S.screen==='settings')shSettings.open();}});
 const shTrip=new Sheet('sh-trip',{open:()=>360+SAB()},{light:true});
 const shLeave=new Sheet('sh-leave',{open:()=>230+SAB()},{});
@@ -656,7 +677,7 @@ function renderTruckGrid(){
 }
 $('obAdjust').onclick=()=>{if(!S.truck){S.truck={...TRUCKS[3]};store.set('truck',S.truck);}$('ob').classList.remove('on');renderChip();openSettings();};
 function renderChip(){$('chip').innerHTML=`${I.truck}<span>${S.truck?S.truck.name:'Caminhão'}</span>`;$('setTruckName').innerHTML=S.truck?`${S.truck.name} · ${fmt1(S.truck.h)} m · ${fmt1(S.truck.wt)} t`:'';}
-['icSearch','icSearch2'].forEach(id=>$(id).innerHTML=I.search);$('centerBtn').innerHTML=I.center;$('navCenter').innerHTML=I.center;$('icWarn').innerHTML=I.warn;$('icEye').innerHTML=I.eye;$('icAlert').innerHTML=I.warn;$('diffBtn2').innerHTML=I.diff+'Diferenças';$('stepsBtn2').innerHTML=I.list+'Trajeto';$('svBtn2').innerHTML=I.eye+'Ver rua';$('alertsBtn2').innerHTML=I.warn+'Alertas da rota';
+['icSearch','icSearch2'].forEach(id=>$(id).innerHTML=I.search);$('centerBtn').innerHTML=I.center;$('navCenter').innerHTML=I.center;$('icWarn').innerHTML=I.warn;$('icEye').innerHTML=I.eye;$('icAlert').innerHTML=I.warn;$('icPlan').innerHTML=I.route;$('diffBtn2').innerHTML=I.diff+'Diferenças';$('stepsBtn2').innerHTML=I.list+'Trajeto';$('svBtn2').innerHTML=I.eye+'Ver rua';$('alertsBtn2').innerHTML=I.warn+'Alertas da rota';
 $('searchBack').innerHTML=I.back;$('updGo').innerHTML=I.go;$('pvBack').innerHTML=I.back;$('noticeX').innerHTML=I.x;$('pickCancel').innerHTML=I.x;$('qClear').innerHTML=I.x;$('arrIc').innerHTML=I.check;
 document.querySelectorAll('[data-close]').forEach(b=>b.innerHTML=I.x);
 $('chip').onclick=openSettings;
@@ -677,7 +698,7 @@ function localSearch(q){
   return {hits:exact.slice(0,6),suggest};
 }
 let searchMode='dest',qTimer=null,searchSeq=0;
-function openSearch(mode){searchMode=mode;S.screen='search';layer('l-home');$('q').value='';$('qClear').classList.remove('on');$('q').placeholder=mode==='dest'?'Cidade, endereço ou rodovia':mode==='stop'?'Próximo destino':'Sair de onde?';renderResults([]);setVVH();shSearch.open();$('q').focus({preventScroll:true});}
+function openSearch(mode){searchMode=mode;S.screen='search';layer('l-home');$('q').value='';$('qClear').classList.remove('on');$('q').placeholder=mode==='dest'?'Cidade, endereço ou rodovia':(mode==='stop'||mode==='plan-dest')?'Próximo destino':'Sair de onde?';renderResults([]);setVVH();shSearch.open();$('q').focus({preventScroll:true});}
 $('searchBack').onclick=()=>shSearch.close();
 $('qClear').onclick=()=>{$('q').value='';$('qClear').classList.remove('on');renderResults([]);$('q').focus({preventScroll:true});};
 $('q').addEventListener('input',()=>{clearTimeout(qTimer);const v=$('q').value.trim();$('qClear').classList.toggle('on',v.length>0);if(v.length<2){renderResults([]);return;}const loc=localSearch(v);renderResults(loc.hits.map(cityRow),true,loc.suggest,true);if(v.length<3)return;qTimer=setTimeout(()=>doSearch(v),450);});
@@ -702,17 +723,69 @@ function renderResults(list,searched,suggest,partial){
   if(searched&&!list.length&&!suggest&&!partial)html+='<div class="empty">Não achei esse lugar. Tente com a cidade e o estado.</div>';
   html+=list.map(r=>rowHtml(r,'pin')).join('');
   if(searchMode==='dest'&&!searched)html+='<button class="link-row" id="fromElse">Sair de outro lugar</button>';
+  if(searchMode==='plan-origin'&&!searched)html='<button class="link-row" id="useMyPos">Usar minha posição</button>'+html;
   $('results').innerHTML=html;
   $('results').querySelectorAll('.li').forEach(b=>b.onclick=()=>pick_(JSON.parse(b.dataset.p)));
   const fe=$('fromElse');if(fe)fe.onclick=()=>openSearch('origin');
+  const mp=$('useMyPos');if(mp)mp.onclick=()=>{P.origin=null;$('q').blur();shSearch.close(true);openPlan();};
   const sb=$('suggestBtn');if(sb&&suggest)sb.onclick=()=>{$('q').value=suggest.name;$('q').dispatchEvent(new Event('input'));};
 }
 function pick_(p){
+  if(searchMode==='plan-origin'||searchMode==='plan-dest'){if(searchMode==='plan-origin')P.origin=p;else P.dests=[...P.dests,p].slice(0,9);S.recents=[p,...S.recents.filter(r=>r.name!==p.name)].slice(0,5);store.set('recents',S.recents);$('q').blur();shSearch.close(true);openPlan();return;}
   if(searchMode==='origin'){S.originOverride=p;openSearch('dest');notice(`Saindo de ${p.name}`,3000);return;}
   if(searchMode==='stop'&&S.dest){S.stops=[...S.stops,S.dest].slice(0,8);}else S.stops=[];
   S.dest=p;S.recents=[p,...S.recents.filter(r=>r.name!==p.name)].slice(0,5);store.set('recents',S.recents);
   $('q').blur();preview();
 }
+
+/* ===== montar rota ===== */
+const P={origin:null,dests:[]};
+function openPlan(fromCurrent){if(fromCurrent){P.origin=S.originOverride||null;P.dests=[...(S.stops||[]),S.dest].filter(Boolean);}
+  S.screen='plan';if(!S.route)layer('l-home');$('notice').classList.remove('on');renderPlan();shPlan.open();}
+function renderPlan(){
+  const rows=[`<div class="dest tapme" id="planA"><span class="ab a">A</span><span class="nm">${P.origin?esc(P.origin.name):'Minha posição'}<small>Partida · toque para trocar</small></span>${P.origin?`<button id="planAx" aria-label="Voltar para minha posição">${I.x}</button>`:''}</div>`]
+    .concat(P.dests.map((d,i)=>`<div class="dest"><span class="ab">${String.fromCharCode(66+i)}</span><span class="nm">${esc(d.name)}<small>${i===P.dests.length-1?'Chegada':'Parada'}${d.sub?' · '+esc(d.sub):''}</small></span>${i>0?`<button data-pup="${i}" aria-label="Subir na ordem">${I.up}</button>`:''}<button data-prm="${i}" aria-label="Remover">${I.x}</button></div>`));
+  $('planBody').innerHTML=`<div class="dests">${rows.join('')}</div>
+    <button class="btn sec" id="planAdd" ${P.dests.length>=9?'disabled':''}>${I.plus}${P.dests.length?'Adicionar outro destino':'Escolher a chegada'}</button>
+    <button class="btn go" id="planGo" ${P.dests.length?'':'disabled style="opacity:.45"'}>${I.route}<span>Ver rota</span></button>
+    ${P.dests.length||P.origin?'<button class="link-row" id="planClear" style="text-align:center">Limpar tudo</button>':'<div class="tag" style="text-align:center">Escolha de onde sai e para onde vai. Pode ser qualquer lugar do Brasil.</div>'}`;
+  $('planA').onclick=e=>{if(e.target.closest('#planAx'))return;shPlan.close(true);openSearch('plan-origin');};
+  const ax=$('planAx');if(ax)ax.onclick=()=>{P.origin=null;renderPlan();};
+  $('planAdd').onclick=()=>{shPlan.close(true);openSearch('plan-dest');};
+  $('planBody').querySelectorAll('[data-prm]').forEach(b=>b.onclick=()=>{P.dests.splice(+b.dataset.prm,1);renderPlan();});
+  $('planBody').querySelectorAll('[data-pup]').forEach(b=>b.onclick=()=>{const i=+b.dataset.pup;[P.dests[i-1],P.dests[i]]=[P.dests[i],P.dests[i-1]];renderPlan();});
+  const pc=$('planClear');if(pc)pc.onclick=()=>{P.origin=null;P.dests=[];renderPlan();};
+  $('planGo').onclick=()=>{if(!P.dests.length)return;const l=[...P.dests];S.originOverride=P.origin;S.dest=l.pop();S.stops=l;shPlan.close(true);preview();};
+}
+$('planBtn').onclick=()=>{P.origin=null;P.dests=[];S.route=null;openPlan();};
+
+/* ===== informações da rota ===== */
+let rulesMode='';
+function renderInfo(){const r=S.route;if(!r)return;const x=S.xray&&S.xray.truck,c=S.car,R=S.rules;const all=[...(S.stops||[]),S.dest];const legs=r.legs||[];
+  const pct=v=>Math.round(100*v/Math.max(r.km,0.1));
+  let h=`<div class="stats"><div><b>${fmtKm(r.km)}</b><small>distância</small></div><div><b>${fmtMin(r.min)}</b><small>tempo</small></div><div><b>${fmtETA(r.min)}</b><small>chegada</small></div></div>`;
+  h+=`<h3>Trajeto</h3><div class="kv"><span>A · ${esc((S.origin&&S.origin.name)||'Minha posição')}</span><b>saída agora</b></div>`;let acc=0;
+  h+=all.map((d,i)=>{const lg=legs[i]||{km:r.km,min:r.min};acc+=lg.min;return `<div class="kv"><span>${String.fromCharCode(66+i)} · ${esc(d.name)}<br><small>${fmtKm(lg.km)} · ${fmtMin(lg.min)}</small></span><b>${fmtETA(acc)}</b></div>`;}).join('');
+  h+=`<h3>Tipo de estrada</h3>`;
+  if(x){const other=Math.max(0,r.km-x.hwy-x.urban-x.dirt-x.rough);
+    h+=`<div class="mix"><i style="width:${pct(x.hwy)}%;background:var(--accent)"></i><i style="width:${pct(other)}%;background:#9aa7be"></i><i style="width:${pct(x.urban)}%;background:#F59E0B"></i><i style="width:${pct(x.rough)}%;background:#F59E0B;opacity:.6"></i><i style="width:${pct(x.dirt)}%;background:#E5484D"></i></div>`+
+     `<div class="kv"><span>Rodovia principal</span><b>${fmtKm(x.hwy)} <small>${pct(x.hwy)}%</small></b></div><div class="kv"><span>Outras estradas asfaltadas</span><b>${fmtKm(other)}</b></div>`+
+     `<div class="kv ${x.urban>1?'wr':''}"><span>Dentro de cidade</span><b>${fmtKm(x.urban)}</b></div><div class="kv ${x.rough>0.3?'wr':''}"><span>Asfalto ruim</span><b>${fmtKm(x.rough)}</b></div>`+
+     `<div class="kv ${x.dirt>0.2?'bad':''}"><span>Estrada de chão</span><b>${x.dirt>0.05?fmtKm(x.dirt):'nenhuma'}</b></div>${x.dirtAccess>0.05?`<div class="kv"><span>Chão na rua de saída ou chegada</span><b>${fmtKm(x.dirtAccess)}</b></div>`:''}`+
+     `<div class="kv"><span>Trecho com pedágio</span><b>${x.toll>0.05?fmtKm(x.toll):(S.toll?'nenhum':'evitando')}</b></div>`;
+    if(S.unknown&&S.unknown.km>0.3)h+=`<div class="kv wr"><span>Piso não confirmado</span><b>${fmtKm(S.unknown.km)}</b></div>`;
+    const lim=x.limits||[];if(lim.length){const mx=Math.max(...lim.map(l=>l.v)),mn=Math.min(...lim.map(l=>l.v));h+=`<div class="kv"><span>Limites de velocidade</span><b>${mn} a ${mx} km/h</b></div>`;}}
+  else h+=`<div class="note" style="margin-top:4px">Analisando o piso da rota...</div>`;
+  h+=`<div class="kv"><span>Radares conhecidos</span><b>${S.radars?S.radars.length:'...'}</b></div>`;
+  if(R&&R.lowest)h+=`<div class="kv ${R.lowest.lvl==='bad'?'bad':R.lowest.lvl==='wr'?'wr':''}"><span>Menor viaduto</span><b>${fmtHt(R.lowest.h)}</b></div>`;
+  const al=alertList(0);h+=`<h3>Alertas (${al.length})</h3>`+(al.length?al.map((a,i)=>`<div class="it ${a.lvl}"><div class="tx"><b>${a.t}</b><small>km ${Math.round(a.along/1000)}${a.s?' · '+a.s:''}</small></div>${a.see?`<button class="eyeb" data-al="${i}" aria-label="Ver">${I.eye}</button>`:''}</div>`).join(''):`<div class="note" style="margin-top:4px">Nenhum alerta. Só asfalto, sem viaduto baixo e sem horário proibido.</div>`);
+  if(c){const dk=r.km-c.km,dm=r.min-c.min;h+=`<h3>Comparado ao carro (Google/Waze)</h3><div class="kv"><span>Rota de carro</span><b>${fmtKm(c.km)} · ${fmtMin(c.min)}</b></div><div class="kv"><span>Sua rota de caminhão</span><b>${dk>=0?'+':'-'}${fmtKm(Math.abs(dk))} · ${dm>=0?'+':'-'}${fmtMin(Math.abs(dm))}</b></div>`;
+    if(S.xray&&S.xray.car)h+=`<div class="kv ${S.xray.car.dirt>0.2?'bad':''}"><span>Chão na rota de carro</span><b>${S.xray.car.dirt>0.05?fmtKm(S.xray.car.dirt):'nenhum'}</b></div>`;}
+  const t=S.truck;if(t)h+=`<h3>Caminhão usado no cálculo</h3><div class="kv"><span>${esc(t.name)}</span><b>${fmtHt(t.h)} · ${fmt1(t.l)} m · ${fmt1(t.wt)} t · ${t.ax} eixos</b></div>`;
+  h+=`<div class="row3" style="margin-top:16px;grid-template-columns:1fr 1fr"><button class="btn sec" id="infoSteps">${I.list}Trajeto</button><button class="btn sec" id="infoDiff" ${c?'':'disabled'}>${I.diff}Diferenças</button></div><div class="note">Dados do OpenStreetMap. Horário de chegada considera saída agora.</div>`;
+  $('rulesBody').innerHTML=h;$('rulesBody').querySelectorAll('[data-al]').forEach(b=>b.onclick=()=>{const a=al[+b.dataset.al];if(a&&a.see)a.see();});
+  $('infoSteps').onclick=()=>{shRules.close(true);openSteps();};$('infoDiff').onclick=()=>{shRules.close(true);openDiff();};}
+function openInfo(){rulesMode='info';$('rulesTitle').textContent='Informações da rota';renderInfo();if(S.screen==='preview')shPreview.close(true);shRules.open();}
 
 /* ===== rota ===== */
 async function post(ep,body){const r=await fetch(`${VALHALLA}/${ep}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!r.ok)throw new Error(ep+' '+r.status);return r.json();}
@@ -725,29 +798,38 @@ async function route(a,b,costing,extraEx=[],via){
   const body={locations:[a,...via,b].map(q=>({lat:q.lat,lon:q.lon})),costing,units:'kilometers',language:'pt-BR'};
   if(costing==='truck'){body.costing_options=truckOpts();const ex=S.reports.filter(r=>['dirt','bridge','notruck','narrow'].includes(r.type)).map(r=>({lat:r.lat,lon:r.lng})).concat(extraEx);if(ex.length)body.exclude_locations=ex.slice(-50);}
   const j=await post('route',body);const legs=j.trip.legs;
-  if(legs.length===1){const leg=legs[0];const pts=decode(leg.shape);const cum=cumDist(pts);return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:leg.shape,pts,maneuvers:leg.maneuvers,cum,legEnds:[cum[cum.length-1]],legs:[{km:leg.summary.length,min:leg.summary.time/60}]};}
+  if(legs.length===1){const leg=legs[0];const pts=decode(leg.shape);const cum=cumDist(pts);return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:leg.shape,pts,maneuvers:leg.maneuvers,cum,legShapes:[leg.shape],legEnds:[cum[cum.length-1]],legs:[{km:leg.summary.length,min:leg.summary.time/60}]};}
   let pts=[],mans=[];const ends=[];
   legs.forEach((leg,k)=>{let lp=decode(leg.shape);const off=k?pts.length-1:0;if(k)lp=lp.slice(1);pts=pts.concat(lp);
     leg.maneuvers.forEach((m,mi)=>{if(k&&mi===0&&m.type<=3)return;const mm={...m,begin_shape_index:m.begin_shape_index+off,end_shape_index:m.end_shape_index+off};if(k<legs.length-1&&m.type>=4&&m.type<=6)mm.stopName=(via[k]&&via[k].name)||'parada';mans.push(mm);});ends.push(pts.length-1);});
   const cum=cumDist(pts);
-  return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:encode(pts),pts,maneuvers:mans,cum,legEnds:ends.map(i=>cum[i]),legs:legs.map(l=>({km:l.summary.length,min:l.summary.time/60}))};
+  return {km:j.trip.summary.length,min:j.trip.summary.time/60,shape:encode(pts),legShapes:legs.map(l=>l.shape),pts,maneuvers:mans,cum,legEnds:ends.map(i=>cum[i]),legs:legs.map(l=>({km:l.summary.length,min:l.summary.time/60}))};
 }
 async function xrayChunk(shape,costing){
-  const j=await post('trace_attributes',{encoded_polyline:shape,costing,shape_match:'edge_walk',units:'kilometers',filters:{attributes:['edge.surface','edge.road_class','edge.length','edge.begin_shape_index','edge.end_shape_index','edge.speed_limit','edge.names','edge.way_id'],action:'include'}});
+  const j=await post('trace_attributes',{encoded_polyline:shape,costing,shape_match:'edge_walk',units:'kilometers',filters:{attributes:['edge.surface','edge.road_class','edge.length','edge.begin_shape_index','edge.end_shape_index','edge.speed_limit','edge.names','edge.way_id','edge.toll'],action:'include'}});
   return {edges:j.edges||[],pts:decode(j.shape||shape)};
 }
+async function xrayRoute(tr,costing){
+  const shapes=tr.legShapes||[tr.shape];if(shapes.length===1)return xray(shapes[0],costing);
+  const M={toll:0,dirt:0,dirtAccess:0,urban:0,hwy:0,total:0,rough:0,dirtSegs:[],urbSegs:[],roughSegs:[],roughRanges:[],dirtRanges:[],limits:[]};let dOff=0,iOff=0;
+  for(const sh of shapes){const x=await xray(sh,costing);const lp=decode(sh),lc=cumDist(lp);
+    for(const k of ['toll','dirt','dirtAccess','urban','hwy','total','rough'])M[k]+=x[k]||0;
+    M.dirtSegs.push(...x.dirtSegs);M.urbSegs.push(...x.urbSegs);M.roughSegs.push(...x.roughSegs);
+    x.roughRanges.forEach(g=>M.roughRanges.push({...g,b:g.b+dOff,e:g.e+dOff}));x.dirtRanges.forEach(g=>{g.b+=dOff;g.e+=dOff;M.dirtRanges.push(g);});
+    x.limits.forEach(l=>M.limits.push({b:l.b+iOff,e:l.e+iOff,v:l.v}));dOff+=lc[lc.length-1];iOff+=lp.length-1;}
+  return M;}
 async function xray(shape,costing){
   const all=decode(shape),cum=cumDist(all);const MAXM=900000;
   // fatias por índice, cada uma com no máximo 900 km
   const slices=[];let start=0;for(let i=1;i<all.length;i++){if(cum[i]-cum[start]>MAXM||i===all.length-1){slices.push([start,i]);start=i;}}
   if(!slices.length)slices.push([0,all.length-1]);
   const UNP=new Set(['compacted','dirt','gravel','path','impassable']),URB=new Set(['residential','unclassified','service_other','living_street']);
-  let dirt=0,dirtAccess=0,urban=0,hwy=0,total=0,rough=0,dirtSegs=[],urbSegs=[],roughSegs=[],roughRanges=[],dirtRanges=[],limits=[],along=0;
+  let toll=0,dirt=0,dirtAccess=0,urban=0,hwy=0,total=0,rough=0,dirtSegs=[],urbSegs=[],roughSegs=[],roughRanges=[],dirtRanges=[],limits=[],along=0;
   const routeKm=cum[cum.length-1]/1000;
   for(const [a,b] of slices){
     const sub=slices.length===1?shape:encode(all.slice(a,b+1));
     const {edges,pts}=await xrayChunk(sub,costing);const off=a;
-    for(const e of edges){const L=e.length||0;total+=L;const bi=e.begin_shape_index+off,ei=e.end_shape_index+off;
+    for(const e of edges){const L=e.length||0;total+=L;if(e.toll)toll+=L;const bi=e.begin_shape_index+off,ei=e.end_shape_index+off;
       if(e.speed_limit&&e.speed_limit<200)limits.push({b:bi,e:ei,v:e.speed_limit});
       const access=along<0.5||routeKm-along<0.5;along+=L;const seg=pts.slice(e.begin_shape_index,e.end_shape_index+1);
       if(UNP.has(e.surface)){if(access)dirtAccess+=L;else{dirt+=L;dirtSegs.push(seg);const b0=(along-L)*1000,en=along*1000,nm=(e.names||[])[0]||'';const last=dirtRanges[dirtRanges.length-1];if(last&&b0-last.e<200){last.e=en;last.pts=last.pts.concat(seg.slice(1));if(!last.name&&nm)last.name=nm;if(e.way_id)last.ways.add(e.way_id);}else dirtRanges.push({b:b0,e:en,name:nm,pts:seg.slice(),ways:new Set(e.way_id?[e.way_id]:[])});}}
@@ -755,7 +837,7 @@ async function xray(shape,costing){
       else if(!access&&URB.has(e.road_class)){urban+=L;urbSegs.push(seg);}
       if(['motorway','trunk','primary'].includes(e.road_class))hwy+=L;}
   }
-  return {dirt,dirtAccess,urban,hwy,total,rough,dirtSegs,urbSegs,roughSegs,roughRanges,dirtRanges,limits};
+  return {toll,dirt,dirtAccess,urban,hwy,total,rough,dirtSegs,urbSegs,roughSegs,roughRanges,dirtRanges,limits};
 }
 /* ===== restrições: viadutos, horários urbanos e feriados PRF ===== */
 let GAB=null,RULES=null;
@@ -810,7 +892,7 @@ function openRules(){const R=S.rules;if(!R)return;const th=(S.truck&&S.truck.h)|
   if(R.cities.length){h+=`<h3>Horário nas cidades</h3>`+R.cities.map(x=>{const eh=`${String(x.eta.getHours()).padStart(2,'0')}:${String(x.eta.getMinutes()).padStart(2,'0')}`;return `<div class="it ${x.active?'bad':''}"><div class="tx"><b>${esc(x.c.name)} · ${esc(x.c.zone)}</b><small>Chega às ${eh} ${DIAS[x.eta.getDay()]} · ${x.active?`proibido até ${fmtH(x.r.to)}`:'liberado'}</small><small style="display:block;margin-top:4px">${esc(x.c.who)}. ${esc(x.c.txt)}</small></div></div>`;}).join('')+`<div class="note">Áreas aproximadas. Se o destino é dentro da área e o horário é proibido, chegue depois do horário ou pare fora dela.</div>`;}
   if(R.federal.length){h+=`<h3>Feriado · rodovias federais (PRF)</h3>`+R.federal.map(f=>`<div class="it bad"><div class="tx"><b>${esc(f.name)} · ${f.date.split('-').reverse().slice(0,2).join('/')} ${fmtH(f.from)} às ${fmtH(f.to)}</b><small>Proibido rodar em BR de pista simples. Multa e caminhão retido até o fim do horário.${f.ufs?' Vale em '+f.ufs.join(', ')+'.':''}</small></div></div>`).join('')+`<div class="note">Vale para veículo acima de 2,60 m de largura, 4,40 m de altura, 19,80 m de comprimento ou 58,5 t, e para bitrem, rodotrem e cegonha. Não vale no AC, AM, AP, PA e RR.</div>`;}
   else if(truckBig())h+=`<h3>Feriado · PRF</h3><div class="note" style="margin-top:4px">Nenhuma restrição de feriado no horário desta viagem.</div>`;
-  $('rulesTitle').textContent='Restrições na rota';$('rulesBody').innerHTML=h;bindRuleSeals($('rulesBody'));if(S.screen==='preview')shPreview.close(true);shRules.open();}
+  rulesMode='rules';$('rulesTitle').textContent='Restrições na rota';$('rulesBody').innerHTML=h;bindRuleSeals($('rulesBody'));if(S.screen==='preview')shPreview.close(true);shRules.open();}
 function alertList(fromAlong){const R=S.rules||{viaducts:[],cities:[],federal:[]},x=S.xray&&S.xray.truck,out=[],th=(S.truck&&S.truck.h)||4.4;
   R.viaducts.forEach((v,i)=>{if(!v.lvl)return;out.push({along:v.along,lvl:v.lvl,ic:'bridge',t:v.h?`Viaduto de ${fmtHt(v.h)}${v.lvl==='bad'?' · não passa':' · justo'}`:'Viaduto baixo, altura não informada',s:`${v.name?esc(v.name)+' · ':''}seu caminhão ${fmtHt(th)}`,see:()=>seeViaduct(i)});});
   R.cities.forEach(c=>{if(!c.active)return;const eh=`${String(c.eta.getHours()).padStart(2,'0')}:${String(c.eta.getMinutes()).padStart(2,'0')}`;out.push({along:c.along,lvl:'bad',ic:'noTruck',t:`${esc(c.c.name)}: caminhão proibido até ${fmtH(c.r.to)}`,s:`${esc(c.c.zone)} · chega às ${eh}`});});
@@ -821,7 +903,7 @@ function alertList(fromAlong){const R=S.rules||{viaducts:[],cities:[],federal:[]
   return out.filter(a=>a.along>=(fromAlong||0)-100).sort((a,b)=>a.along-b.along);}
 function curAlong(){if(!S.route||!S.pos||S.screen!=='nav')return 0;const n=nearest(S.route.pts,[S.pos.lat,S.pos.lon]);return S.route.cum[n.i]+(S.route.cum[n.i+1]-S.route.cum[n.i])*n.t;}
 function openAlerts(){const from=curAlong();const list=alertList(from);const nav=S.screen==='nav';
-  $('rulesTitle').textContent='Alertas da rota';
+  rulesMode='alerts';$('rulesTitle').textContent='Alertas da rota';
   $('rulesBody').innerHTML=list.length?`<div style="height:8px"></div>`+list.map((a,i)=>`<div class="it ${a.lvl}"><span class="ic" style="width:40px;height:40px;border-radius:50%;background:${a.lvl==='bad'?'var(--danger-soft)':'var(--warn-soft)'};color:${a.lvl==='bad'?'var(--on-danger-soft)':'var(--on-warn-soft)'};display:grid;place-items:center;flex:none">${I[a.ic]||I.warn}</span><div class="tx"><b>${a.t}</b><small>${a.along>0?(nav?'em ':'km ')+(nav?fmtM(Math.max(0,a.along-from)):Math.round(a.along/1000)):'toda a viagem'}${a.s?' · '+a.s:''}</small></div>${a.see?`<button class="eyeb" data-al="${i}" aria-label="Ver">${I.eye}</button>`:''}</div>`).join('')+`<div class="note">Toque no olho para ver o ponto na rua.</div>`
     :`<div class="note" style="margin-top:12px">Nenhum alerta ${nav?'daqui até o destino':'nesta rota'}. Só asfalto, sem viaduto baixo e sem horário proibido.</div>`;
   $('rulesBody').querySelectorAll('[data-al]').forEach(b=>b.onclick=()=>{const a=list[+b.dataset.al];if(a.see)a.see();});
@@ -831,7 +913,7 @@ function updAlertBadge(){const b=$('navAlert');if(S.screen!=='nav'){b.classList.
 function renderCalNext(){if(!RULES)return;const t=nowMs();const nx=RULES.federal.windows.map(w=>{const [y,m,d]=w[0].split('-').map(Number);return {w,a:new Date(y,m-1,d,w[1]).getTime()};}).find(x=>x.a>t-6*3600000);const el=$('calNext');if(el)el.textContent=nx?`próximo ${nx.w[0].split('-').reverse().slice(0,2).join('/')}`:'';}
 function openCal(){if(!RULES)return;const t=nowMs();const rows=RULES.federal.windows.filter(w=>{const [y,m,d]=w[0].split('-').map(Number);return new Date(y,m-1,d,w[2]).getTime()>t;});
   const byName=[];for(const w of rows){let g=byName.find(x=>x.name===w[3]);if(!g){g={name:w[3],ufs:w[4]||null,items:[]};byName.push(g);}g.items.push(w);}
-  $('rulesTitle').textContent='Feriados com restrição';$('rulesBody').innerHTML=`<div class="note" style="margin-top:8px">Rodovias federais de pista simples. Vale para veículo acima de 2,60 m de largura, 4,40 m de altura, 19,80 m de comprimento ou 58,5 t, e para bitrem, rodotrem e cegonha. Não vale no AC, AM, AP, PA e RR.${truckBig()?' <b>Seu caminhão entra na restrição.</b>':' Seu caminhão atual não entra na restrição.'}</div>`+
+  rulesMode='cal';$('rulesTitle').textContent='Feriados com restrição';$('rulesBody').innerHTML=`<div class="note" style="margin-top:8px">Rodovias federais de pista simples. Vale para veículo acima de 2,60 m de largura, 4,40 m de altura, 19,80 m de comprimento ou 58,5 t, e para bitrem, rodotrem e cegonha. Não vale no AC, AM, AP, PA e RR.${truckBig()?' <b>Seu caminhão entra na restrição.</b>':' Seu caminhão atual não entra na restrição.'}</div>`+
     byName.map(g=>`<h3>${esc(g.name)}${g.ufs?' · '+g.ufs.join(', '):''}</h3>`+g.items.map(w=>{const [y,m,d]=w[0].split('-').map(Number);const dt=new Date(y,m-1,d);return `<div class="it"><div class="tx"><b>${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')} ${DIAS[dt.getDay()]}</b><small>${fmtH(w[1])} às ${fmtH(w[2])}</small></div></div>`;}).join('')).join('')+`<div class="note">Fonte: Portaria DIOP/PRF nº 26/2026.</div>`;
   shSettings.close(true);shRules.open();}
 $('openCal').onclick=openCal;
@@ -858,7 +940,7 @@ function headingAt(lat,lon){if(!S.route)return 0;const n=nearest(S.route.pts,[la
 
 /* desvio automático: se a rota de caminhão ainda pisa em chão fora da saída/chegada, exclui esses trechos e recalcula */
 async function avoidDirt(tr,seq){
-  let cur=tr,raw=null,x;S.noAlt=null;try{x=await xray(cur.shape,'truck');}catch(e){return null;}
+  let cur=tr,raw=null,x;S.noAlt=null;try{x=await xrayRoute(cur,'truck');}catch(e){return null;}
   for(let round=0;round<2;round++){
     if(seq!==pvSeq)return null;
     if(x.dirt<=0.2||!x.dirtRanges.length)break;
@@ -866,7 +948,7 @@ async function avoidDirt(tr,seq){
     const pts=[];
     for(const ch of x.dirtRanges){let acc=0;for(let i=1;i<ch.pts.length;i++){acc+=hav(ch.pts[i-1],ch.pts[i]);if(acc>400){pts.push({lat:ch.pts[i][0],lon:ch.pts[i][1]});acc=0;}}const m=ch.pts[Math.floor(ch.pts.length/2)];pts.push({lat:m[0],lon:m[1]});}
     let next;try{next=await route(S.origin,S.dest,'truck',pts.slice(0,50));}catch(e){S.noAlt={km:x.dirt,name:x.dirtRanges[0].name};break;}
-    let nx;try{nx=await xray(next.shape,'truck');}catch(e){break;}
+    let nx;try{nx=await xrayRoute(next,'truck');}catch(e){break;}
     if(nx.dirt>=x.dirt-0.2){S.noAlt={km:x.dirt,name:x.dirtRanges[0].name};break;}
     cur=next;x=nx;
   }
@@ -906,10 +988,10 @@ async function preview(){
     let av=null;try{av=await avoidDirt(tr,seq);}catch(e){console.warn('raio-x indisponível',e);}if(seq!==pvSeq)return;
     let xt=av?av.xray:null;
     if(av&&av.route!==tr){tr=av.route;S.route=tr;S.raw=av.raw;S.radars=radarsFromDB(tr);S.rules=checkRules(tr);drawRadars();drawRoute(tr,car,false);renderPreview();shPreview.open('expanded');fitRoute();}
-    const re=()=>{renderPreview();if(shPreview.state)shPreview.open(shPreview.state);};
+    const re=()=>{renderPreview();if(shPreview.state)shPreview.open(shPreview.state);if(shRules.state&&rulesMode==='info')renderInfo();};
     fetchRadars(tr).then(rs=>{if(seq!==pvSeq)return;S.radars=rs;drawRadars();re();});
     fetchUnknownSurface(tr).then(u=>{if(seq!==pvSeq)return;S.unknown=u;drawUnknown();re();});
-    try{if(car){const xc=await xray(car.shape,'auto');if(seq!==pvSeq)return;if(!xt)xt=await xray(tr.shape,'truck');if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};re();}else if(xt){S.xray={car:null,truck:xt};}}catch(e){console.warn('raio-x indisponível',e);if(seq!==pvSeq)return;if(xt)S.xray={car:null,truck:xt};}
+    try{if(car){const xc=await xrayRoute(car,'auto');if(seq!==pvSeq)return;if(!xt)xt=await xrayRoute(tr,'truck');if(seq!==pvSeq)return;S.xray={car:xc,truck:xt};re();}else if(xt){S.xray={car:null,truck:xt};}}catch(e){console.warn('raio-x indisponível',e);if(seq!==pvSeq)return;if(xt)S.xray={car:null,truck:xt};}
     if(xt){try{await verifyDirt(xt);}catch(e){}if(seq!==pvSeq)return;re();}
     drawDirtOnMap();
   }catch(e){clearTimeout(slow);if(seq!==pvSeq)return;console.error(e);
@@ -951,15 +1033,17 @@ function renderPreview(){
   if(S.xray&&S.xray.truck.rough>0.3)chips.push(`<div class="seal warn">${I.warn}<span>${fmtKm(S.xray.truck.rough)} de asfalto ruim</span><button class="eyeb" id="seeRough" aria-label="Ver o asfalto ruim">${I.eye}</button></div>`);
   if(w&&w.cls==='acc'&&unk)chips.push(`<div class="seal acc">${I.shield}<span>${w.txt}</span></div>`);
   const all=[...(S.stops||[]),S.dest];const legs=r.legs||[];
-  const dests=`<div class="dests">${all.map((d,i)=>`<div class="dest"><span class="ab">${String.fromCharCode(66+i)}</span><span class="nm">${esc(d.name)}${all.length>1&&legs[i]?`<small>${fmtKm(legs[i].km)} · ${fmtMin(legs[i].min)}</small>`:''}</span>${all.length>1&&i>0?`<button data-up="${i}" aria-label="Subir na ordem">${I.up}</button>`:''}${all.length>1?`<button data-rm="${i}" aria-label="Remover destino">${I.x}</button>`:''}${i===all.length-1&&all.length<9?`<button class="add" id="addStop" aria-label="Adicionar destino">${I.plus}</button>`:''}</div>`).join('')}</div>`;
+  const dests=`<div class="dests"><div class="dest tapme" id="pvOrigin"><span class="ab a">A</span><span class="nm">${esc((S.originOverride&&S.originOverride.name)||'Minha posição')}<small>Partida · toque para montar a rota</small></span></div>${all.map((d,i)=>`<div class="dest"><span class="ab">${String.fromCharCode(66+i)}</span><span class="nm">${esc(d.name)}${all.length>1&&legs[i]?`<small>${fmtKm(legs[i].km)} · ${fmtMin(legs[i].min)}</small>`:''}</span>${all.length>1&&i>0?`<button data-up="${i}" aria-label="Subir na ordem">${I.up}</button>`:''}${all.length>1?`<button data-rm="${i}" aria-label="Remover destino">${I.x}</button>`:''}${i===all.length-1&&all.length<9?`<button class="add" id="addStop" aria-label="Adicionar destino">${I.plus}</button>`:''}</div>`).join('')}</div>`;
   $('pvBody').innerHTML=`<div class="stack" style="padding-top:4px">
     ${dests}
     ${chips.length?`<div class="chips">${chips.join('')}</div>`:''}
     <div class="row3"><button class="btn sec" id="diffBtn" ${S.car?'':'disabled'}>${I.diff}Diferenças</button><button class="btn sec" id="stepsBtn">${I.list}Trajeto</button><button class="btn sec" id="svBtn">${I.eye}Ver rua</button></div>
+    <button class="btn sec" id="infoBtn">${I.info}Todas as informações da rota</button>
     <button class="btn outline" id="markDirt">${I.dirt}Desviar de chão</button>
     ${unk?'<div class="tag" style="text-align:center">Confira na rua antes de sair.</div>':''}</div>`;
   bindRuleSeals($('pvBody'));
   const ad=$('addStop');if(ad)ad.onclick=()=>openSearch('stop');
+  $('pvOrigin').onclick=()=>{shPreview.close(true);openPlan(true);};$('infoBtn').onclick=openInfo;
   $('pvBody').querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{const l=[...S.stops,S.dest];l.splice(+b.dataset.rm,1);S.dest=l.pop();S.stops=l;preview();});
   $('pvBody').querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{const l=[...S.stops,S.dest];const i=+b.dataset.up;[l[i-1],l[i]]=[l[i],l[i-1]];S.dest=l.pop();S.stops=l;preview();});
   const sd=$('seeDirtSeal');if(sd)sd.onclick=e=>{e.stopPropagation();seeDirt('dirt');};
@@ -1089,7 +1173,7 @@ if(window.speechSynthesis){pickVoice();speechSynthesis.onvoiceschanged=pickVoice
 function speak(t){try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(t);u.lang='pt-BR';if(ptVoice)u.voice=ptVoice;u.rate=1.02;speechSynthesis.speak(u);}catch(e){}}
 async function recalc(){
   S.navi.recalc=true;setState('Recalculando...','acc',0,'recalc');if(S.voice)speak('Recalculando a rota.');
-  try{const al=curAlong();const le=S.route.legEnds||[];S.stops=(S.stops||[]).filter((q,i)=>le[i]==null||le[i]>al+60);const tr=await route(S.pos,S.dest,'truck');S.route=tr;S.origin={...S.pos};S.rules=checkRules(tr);drawRoute(tr,null,false);spoken=new Set();offCount=0;fetchRadars(tr).then(rs=>{S.radars=rs;drawRadars();});xray(tr.shape,'truck').then(x=>{S.xray=S.xray||{};S.xray.truck=x;updAlertBadge();}).catch(()=>{});}
+  try{const al=curAlong();const le=S.route.legEnds||[];S.stops=(S.stops||[]).filter((q,i)=>le[i]==null||le[i]>al+60);const tr=await route(S.pos,S.dest,'truck');S.route=tr;S.origin={...S.pos};S.rules=checkRules(tr);drawRoute(tr,null,false);spoken=new Set();offCount=0;fetchRadars(tr).then(rs=>{S.radars=rs;drawRadars();});xrayRoute(tr,'truck').then(x=>{S.xray=S.xray||{};S.xray.truck=x;updAlertBadge();}).catch(()=>{});}
   catch(e){}
   S.navi.recalc=false;clearState();navTick();
 }
